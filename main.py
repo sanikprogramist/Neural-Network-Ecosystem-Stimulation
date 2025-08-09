@@ -52,6 +52,8 @@ root.withdraw()  # Hide the root window
 herbivore_extinction_counter = 0
 predator_extinction_counter = 0
 
+print("testing message to test git")
+
 
 # ----------------------INITIALISE PLOTS -------------------------
 plot_window = tk.Tk()
