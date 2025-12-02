@@ -9,7 +9,7 @@ import torch
 from scipy.spatial import distance_matrix
 from scipy.spatial import cKDTree
 from game_functions import *
-from class_herbivore_nn import *
+from class_animal_brain_nn import *
 
 
 
@@ -21,7 +21,7 @@ class World:
 
     def __init__(self):
         #globals
-        self.world_speed_multiplier = 5
+        self.world_speed_multiplier = 1
         self.world_width = 800
         self.world_height = 600
 
@@ -1052,5 +1052,3 @@ class World:
 
             close_button = tk.Button(self.stats_window, text="Close", command=self.stats_window.destroy)
             close_button.pack(pady=5)
-
-    

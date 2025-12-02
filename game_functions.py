@@ -1,7 +1,6 @@
 import numpy as np
 import time
-from scipy.spatial import cKDTree
-from class_herbivore_nn import *
+from class_animal_brain_nn import *
 
 FOOD_LABEL = 1.0
 CONSPECIFIC_LABEL = 0.1
