@@ -1,10 +1,8 @@
 import numpy as np
-import pygame as pg
 import pandas as pd
-import tkinter as tk
-from tkinter import ttk
 import copy
 import torch
+import threading
 
 from scipy.spatial import distance_matrix
 from scipy.spatial import cKDTree
@@ -12,16 +10,12 @@ from game_functions import *
 from class_animal_brain_nn import *
 
 
-
-
-#need boundary handling
-
 class World:
 
 
     def __init__(self):
         #globals
-        self.world_speed_multiplier = 1
+        self.world_speed_multiplier = 2
         self.world_width = 800
         self.world_height = 600
 
@@ -132,21 +126,17 @@ class World:
         self.selected_herbivore_index = None
         self.selected_predator_index = None
         self.world_time = 0
-        self.herbivore_sprite = pg.image.load("herbivore.png").convert_alpha()
-        self.herbivore_sprite = pg.transform.scale(self.herbivore_sprite, (self.herbivore_size*2, self.herbivore_size*2))
-        self.predator_sprite = pg.image.load("predator.png").convert_alpha()
-        self.predator_sprite = pg.transform.scale(self.predator_sprite, (self.predator_size*2, self.predator_size*2))
         self.predator_death_log = pd.DataFrame(columns=["fitness", "generation"])
 
     def update(self,dt): # super master function which updates the state of the world
         self.update_plants(dt)
         self.update_herbivores(dt)
         self.update_predators(dt)
+        self.world_time += dt * self.world_speed_multiplier
     
     def get_free_indices(self, mask, slots_needed): # utility function
         free_indices = np.where(mask == False)[0][0:slots_needed]
         return free_indices
-    
     
     def get_best_brain(self):
         if np.max(self.predator_fitnesses) >= self.predator_current_best_fitness:
@@ -161,6 +151,169 @@ class World:
             self.herbivore_best_bias = self.herbivore_nn_inputs[np.argmax(self.herbivore_fitnesses),self.herbivore_num_of_raysections*2+1]
             self.herbivore_best_generation = self.herbivore_generations[np.argmax(self.herbivore_fitnesses)]
             
+    def _serialize_position(self, position):
+        return [float(position[0]), float(position[1])]
+
+    def _serialize_scalar(self, value):
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
+
+    def get_simulation_state(self):
+        plant_indices = np.where(self.alive_plant_array)[0]
+        herbivore_indices = np.where(self.alive_herbivore_array)[0]
+        predator_indices = np.where(self.alive_predator_array)[0]
+
+        plants = [
+            {
+                "x": float(self.plant_positions[i, 0]),
+                "y": float(self.plant_positions[i, 1])
+            }
+            for i in plant_indices
+        ]
+
+
+        herbivores = [
+            {
+                "id": int(i),
+                "species": "herbivore",
+                "x": float(self.herbivore_positions[i, 0]),
+                "y": float(self.herbivore_positions[i, 1]),
+                "angle": float(self.herbivore_angles[i]),
+                "speed": float(self.herbivore_speeds[i]),
+                "satiety": float(self.herbivore_satiety[i]),
+                "age": float(self.herbivore_ages[i]),
+                "generation": int(self.herbivore_generations[i]),
+                "fitness": float(self.herbivore_fitnesses[i]),
+                "reproduction_progress": float(self.herbivore_reproduction_timers[i] / max(self.herbivore_gestation_time, 1)),
+            }
+            for i in herbivore_indices
+        ]
+
+
+        predators = [
+        {
+            "id": int(i),
+            "species": "predator",
+            "x": float(self.predator_positions[i, 0]),
+            "y": float(self.predator_positions[i, 1]),
+            "angle": float(self.predator_angles[i]),
+            "speed": float(self.predator_speeds[i]),
+            "satiety": float(self.predator_satiety[i]),
+            "age": float(self.predator_ages[i]),
+            "generation": int(self.predator_generations[i]),
+            "fitness": float(self.predator_fitnesses[i]),
+            "reproduction_progress": float(self.predator_reproduction_timers[i] / max(self.predator_gestation_time, 1)),
+        }
+            for i in predator_indices
+            ]
+        selected = None
+        if self.selected_herbivore_index is not None and self.alive_herbivore_array[self.selected_herbivore_index]:
+            selected = {
+                "species": "herbivore",
+                "id": int(self.selected_herbivore_index)
+            }
+        elif self.selected_predator_index is not None and self.alive_predator_array[self.selected_predator_index]:
+            selected = {
+                "species": "predator",
+                "id": int(self.selected_predator_index)
+            }
+
+        return {
+            "world": {
+                "width": int(self.world_width),
+                "height": int(self.world_height),
+                "time": float(self.world_time),
+                "current_plant": int(self.current_plant),
+                "current_herbivore": int(self.current_herbivore),
+                "current_predator": int(self.current_predator),
+                "show_raycast": bool(self.show_raycast),
+            },
+            "plants": plants,
+            "herbivores": herbivores,
+            "predators": predators,
+            "selected": selected,
+        }
+
+    def get_chart_data(self):
+        return {
+            "world_time": float(self.world_time),
+            "current_plant": int(self.current_plant),
+            "current_herbivore": int(self.current_herbivore),
+            "current_predator": int(self.current_predator),
+            "predator_death_log": [
+                {
+                    "generation": int(row["generation"]),
+                    "fitness": float(row["fitness"])
+                }
+                for _, row in self.predator_death_log.iterrows()
+            ]
+        }
+
+    def get_animal_stats(self, species, index):
+        if species == "herbivore":
+                if index < 0 or index >= self.max_herbivore or not self.alive_herbivore_array[index]:
+                    raise IndexError("Herbivore index is invalid or dead")
+                brain = self.herbivore_brains[index]
+                positions = self.herbivore_positions[index]
+                stats = {
+                        "species": "herbivore",
+                        "id": int(index),
+                        "x": float(positions[0]),
+                        "y": float(positions[1]),
+                        "angle": float(self.herbivore_angles[index]),
+                        "speed": float(self.herbivore_speeds[index]),
+                        "satiety": float(self.herbivore_satiety[index]),
+                        "age": float(self.herbivore_ages[index]),
+                        "generation": int(self.herbivore_generations[index]),
+                        "fitness": float(self.herbivore_fitnesses[index]),
+                        "reproduction_progress": float(self.herbivore_reproduction_timers[index] / max(self.herbivore_gestation_time, 1)),
+                        "children": int(self.herbivore_offsping_count[index]),
+                        "hidden_dim_1": None,
+                        "hidden_dim_2": None,
+                    }
+                    # if brain exists, include hidden layer sizes; otherwise return None
+                if brain is not None:
+                    try:
+                        dims = brain.get_dim_sizes()
+                        stats["hidden_dim_1"] = int(dims[0])
+                        stats["hidden_dim_2"] = int(dims[1])
+                    except Exception:
+                        stats["hidden_dim_1"] = None
+                        stats["hidden_dim_2"] = None
+                return stats
+        elif species == "predator":
+            if index < 0 or index >= self.max_predator or not self.alive_predator_array[index]:
+                raise IndexError("Predator index is invalid or dead")
+            brain = self.predator_brains[index]
+            positions = self.predator_positions[index]
+            stats = {
+                    "species": "predator",
+                    "id": int(index),
+                    "x": float(positions[0]),
+                    "y": float(positions[1]),
+                    "angle": float(self.predator_angles[index]),
+                    "speed": float(self.predator_speeds[index]),
+                    "satiety": float(self.predator_satiety[index]),
+                    "age": float(self.predator_ages[index]),
+                    "generation": int(self.predator_generations[index]),
+                    "fitness": float(self.predator_fitnesses[index]),
+                    "reproduction_progress": float(self.predator_reproduction_timers[index] / max(self.predator_gestation_time, 1)),
+                    "children": int(self.predator_offsping_count[index]),
+                    "hidden_dim_1": None,
+                    "hidden_dim_2": None,
+                }
+            if brain is not None:
+                try:
+                    dims = brain.get_dim_sizes()
+                    stats["hidden_dim_1"] = int(dims[0])
+                    stats["hidden_dim_2"] = int(dims[1])
+                except Exception:
+                    stats["hidden_dim_1"] = None
+                    stats["hidden_dim_2"] = None
+            return stats
+        else:
+            raise ValueError("Species must be 'herbivore' or 'predator'")
         
 
 
@@ -188,20 +341,20 @@ class World:
             self.plant_reproduction_timer_accumulator = 0.0
     
     def spawn_food(self,how_many_to_spawn):
-        available_slots = np.sum(np.invert(self.alive_plant_array))
-        spawn_count = min(how_many_to_spawn, available_slots)
+            available_slots = np.sum(np.invert(self.alive_plant_array))
+            spawn_count = min(how_many_to_spawn, available_slots)
 
-        if spawn_count > 0:
-            free_indeces = self.get_free_indices(self.alive_plant_array,spawn_count)
+            if spawn_count > 0:
+                free_indeces = self.get_free_indices(self.alive_plant_array,spawn_count)
 
 
-            new_plant_positions = np.random.randint(low=[1,1], 
-                                                    high=[self.world_width-1,self.world_height-1],
-                                                    size=(spawn_count,2))
-            self.plant_positions[free_indeces] = new_plant_positions
-            self.alive_plant_array[free_indeces] = True
-            self.plant_reproduction_timers[free_indeces] = 0.0
-            self.current_plant += spawn_count
+                new_plant_positions = np.random.randint(low=[1,1], 
+                                                        high=[self.world_width-1,self.world_height-1],
+                                                        size=(spawn_count,2))
+                self.plant_positions[free_indeces] = new_plant_positions
+                self.alive_plant_array[free_indeces] = True
+                self.plant_reproduction_timers[free_indeces] = 0.0
+                self.current_plant += spawn_count
     
     def spawn_food_from_parents(self, parent_indices):
         available_slots = np.sum(~self.alive_plant_array)
@@ -428,18 +581,26 @@ class World:
 
 
     def check_herbivore_plant_collisions(self):
-        d = distance_matrix(self.herbivore_positions[self.alive_herbivore_array],self.plant_positions[self.alive_plant_array])
-        consumed = np.column_stack(np.where(d<=self.plant_size+2))
-        
-        #careful, these are indices of the alive plants and animals
-        #consumed_plant_indices = consumed[:,1]
-        #herbivores_that_ate_indices = consumed[:,0]
+        if not np.any(self.alive_herbivore_array) or not np.any(self.alive_plant_array):
+            return
+
+        d = distance_matrix(self.herbivore_positions[self.alive_herbivore_array], self.plant_positions[self.alive_plant_array])
+        rows, cols = np.where(d <= self.plant_size + 2)
+        if rows.size == 0:
+            return
 
         alive_herbivores = np.where(self.alive_herbivore_array)[0]
-        herbivores_that_ate_indices = alive_herbivores[consumed[:,0]]
-
         alive_plants = np.where(self.alive_plant_array)[0]
-        plants_that_were_eaten_indices = alive_plants[consumed[:,1]]
+
+        valid = (rows < alive_herbivores.shape[0]) & (cols < alive_plants.shape[0])
+        if not np.all(valid):
+            rows = rows[valid]
+            cols = cols[valid]
+            if rows.size == 0:
+                return
+
+        herbivores_that_ate_indices = alive_herbivores[rows]
+        plants_that_were_eaten_indices = alive_plants[cols]
 
         # Filter herbivores that have satiety < X% of max
         can_eat_mask = self.herbivore_satiety[herbivores_that_ate_indices] < (self.herbivore_max_percent_satiety_to_eat * self.herbivore_max_satiety)
@@ -471,78 +632,78 @@ class World:
 
 
     def spawn_herbivore(self, how_many_to_spawn, parent_index=-1):
-        available_slots = np.sum(np.invert(self.alive_herbivore_array))
-        spawn_count = min(how_many_to_spawn, available_slots)
+            available_slots = np.sum(np.invert(self.alive_herbivore_array))
+            spawn_count = min(how_many_to_spawn, available_slots)
 
-        if spawn_count > 0:
-            free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
+            if spawn_count > 0:
+                free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
 
-            if parent_index < 0:
-                new_herbivore_positions = np.random.randint(low=[1,1], 
-                                                    high=[self.world_width-1,self.world_height-1],
-                                                    size=(spawn_count,2))
-                new_herbivore_angles = np.random.uniform(low=-np.pi, 
-                                                    high=np.pi,
-                                                    size=spawn_count)
-                self.herbivore_positions[free_indeces] = new_herbivore_positions
-                self.herbivore_angles[free_indeces] = new_herbivore_angles
-                self.herbivore_speeds[free_indeces] = 0
-                self.herbivore_angular_velocities[free_indeces] = 0
-                self.herbivore_reproduction_timers[free_indeces] = 0.0
-                self.herbivore_ages[free_indeces] = 5
-                self.herbivore_fitnesses[free_indeces] = 0
-                self.herbivore_offsping_count[free_indeces] = 0.0
-                self.herbivore_satiety[free_indeces] = 1
-                self.alive_herbivore_array[free_indeces] = True
-                self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = np.random.uniform(low= -1.0,
-                                                                        high = 1.0,
-                                                                        size=spawn_count)
-                self.herbivore_generations[free_indeces] = 0
-                for idx in free_indeces:
-                    self.herbivore_brains[idx] = AnimalBrain(
-                        n_ray_sections=self.herbivore_num_of_raysections,
-                        n_types_of_info_in_each_section=self.num_types_of_visual_info,
-                        hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
-                        hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0]
-                        )
-                self.current_herbivore += spawn_count
-            
-            else: 
-                self.herbivore_offsping_count[parent_index] += 1
-                #since this option will always just spawn one animals, free indeces will always be a single number,
-                #and so will spawn count
-                parent_position = self.herbivore_positions[parent_index]
-                child_position = parent_position + np.random.randint(0,1,2)
-                self.herbivore_positions[free_indeces] = child_position
-                self.herbivore_angles[free_indeces] = np.random.randint(-np.pi,np.pi,1)
-                self.herbivore_speeds[free_indeces] = 0
-                self.herbivore_angular_velocities[free_indeces] = 0
-                self.herbivore_reproduction_timers[free_indeces] = 0
-                self.herbivore_ages[free_indeces] = 0.0
-                self.herbivore_offsping_count[free_indeces] = 0.0
-                self.herbivore_satiety[free_indeces] = 1
-                self.herbivore_fitnesses[free_indeces] = 0
-                self.alive_herbivore_array[free_indeces] = True
-                self.herbivore_generations[free_indeces] = self.herbivore_generations[parent_index]+1
-                self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = self.herbivore_nn_inputs[parent_index,self.herbivore_num_of_raysections*2+1] + np.clip(np.random.uniform(low=-self.global_mutation_strength,
+                if parent_index < 0:
+                    new_herbivore_positions = np.random.randint(low=[1,1], 
+                                                        high=[self.world_width-1,self.world_height-1],
+                                                        size=(spawn_count,2))
+                    new_herbivore_angles = np.random.uniform(low=-np.pi, 
+                                                        high=np.pi,
+                                                        size=spawn_count)
+                    self.herbivore_positions[free_indeces] = new_herbivore_positions
+                    self.herbivore_angles[free_indeces] = new_herbivore_angles
+                    self.herbivore_speeds[free_indeces] = 0
+                    self.herbivore_angular_velocities[free_indeces] = 0
+                    self.herbivore_reproduction_timers[free_indeces] = 0.0
+                    self.herbivore_ages[free_indeces] = 5
+                    self.herbivore_fitnesses[free_indeces] = 0
+                    self.herbivore_offsping_count[free_indeces] = 0.0
+                    self.herbivore_satiety[free_indeces] = 1
+                    self.alive_herbivore_array[free_indeces] = True
+                    self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = np.random.uniform(low= -1.0,
+                                                                            high = 1.0,
+                                                                            size=spawn_count)
+                    self.herbivore_generations[free_indeces] = 0
+                    for idx in free_indeces:
+                        self.herbivore_brains[idx] = AnimalBrain(
+                            n_ray_sections=self.herbivore_num_of_raysections,
+                            n_types_of_info_in_each_section=self.num_types_of_visual_info,
+                            hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
+                            hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0]
+                            )
+                    self.current_herbivore += spawn_count
+                
+                else: 
+                    self.herbivore_offsping_count[parent_index] += 1
+                    #since this option will always just spawn one animals, free indeces will always be a single number,
+                    #and so will spawn count
+                    parent_position = self.herbivore_positions[parent_index]
+                    child_position = parent_position + np.random.randint(0,1,2)
+                    self.herbivore_positions[free_indeces] = child_position
+                    self.herbivore_angles[free_indeces] = np.random.randint(-np.pi,np.pi,1)
+                    self.herbivore_speeds[free_indeces] = 0
+                    self.herbivore_angular_velocities[free_indeces] = 0
+                    self.herbivore_reproduction_timers[free_indeces] = 0
+                    self.herbivore_ages[free_indeces] = 0.0
+                    self.herbivore_offsping_count[free_indeces] = 0.0
+                    self.herbivore_satiety[free_indeces] = 1
+                    self.herbivore_fitnesses[free_indeces] = 0
+                    self.alive_herbivore_array[free_indeces] = True
+                    self.herbivore_generations[free_indeces] = self.herbivore_generations[parent_index]+1
+                    self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = self.herbivore_nn_inputs[parent_index,self.herbivore_num_of_raysections*2+1] + np.clip(np.random.uniform(low=-self.global_mutation_strength,
                                                                                                                                                                                                         high= self.global_mutation_strength,
                                                                                                                                                                                                         size=1), 
                                                                                                                                                                                                         -1,1)
 
-                child_brain = copy.deepcopy(self.herbivore_brains[parent_index])
-                sizes = child_brain.get_dim_sizes()
-                for dimension, index in zip(["fc1","fc2"],[0,1]):
-                    if np.random.uniform(low=0.0,high=1.0,size=1)[0] <= self.global_mutation_rate:
-                        child_brain = resize_layer_in_animal_brain(child_brain,
+                    child_brain = copy.deepcopy(self.herbivore_brains[parent_index])
+                    sizes = child_brain.get_dim_sizes()
+                    for dimension, index in zip(["fc1","fc2"],[0,1]):
+                        if np.random.uniform(low=0.0,high=1.0,size=1)[0] <= self.global_mutation_rate:
+                            child_brain = resize_layer_in_animal_brain(child_brain,
                                                                 layer=dimension,
                                                                 new_size=np.clip((sizes[index]+np.random.choice([-1,1])),a_min=1,a_max=20),
                                                                 init_std=0.5)
-                child_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
-                self.herbivore_brains[free_indeces] = child_brain
-                self.current_herbivore += spawn_count
-                self.herbivore_reproduction_timers[parent_index] = 0.0
-                self.herbivore_satiety[parent_index] -= self.herbivore_reproduction_satiety_loss
-                self.herbivore_fitnesses[parent_index] += 2 * (1/max(self.current_plant, 0.01)) * (1+0.5*self.current_predator/self.max_predator)
+                    child_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+                    self.herbivore_brains[free_indeces] = child_brain
+                    self.current_herbivore += spawn_count
+                    self.herbivore_reproduction_timers[parent_index] = 0.0
+                    self.herbivore_satiety[parent_index] -= self.herbivore_reproduction_satiety_loss
+                    self.herbivore_fitnesses[parent_index] += 2 * (1/max(self.current_plant, 0.01)) * (1+0.5*self.current_predator/self.max_predator)
 
     def resurrect_herbivores(self, spawn_count):
 
@@ -732,78 +893,78 @@ class World:
             self.spawn_predator(1,parent_index=i)
     
     def spawn_predator(self, how_many_to_spawn, parent_index=-1):
-        available_slots = np.sum(np.invert(self.alive_predator_array))
-        spawn_count = min(how_many_to_spawn, available_slots)
+            available_slots = np.sum(np.invert(self.alive_predator_array))
+            spawn_count = min(how_many_to_spawn, available_slots)
 
-        if spawn_count > 0:
-            free_indeces = self.get_free_indices(self.alive_predator_array,spawn_count)
+            if spawn_count > 0:
+                free_indeces = self.get_free_indices(self.alive_predator_array,spawn_count)
 
-            if parent_index < 0:
-                new_predator_positions = np.random.randint(low=[1,1], 
-                                                    high=[self.world_width-1,self.world_height-1],
-                                                    size=(spawn_count,2))
-                new_predator_angles = np.random.uniform(low=-np.pi, 
-                                                    high=np.pi,
-                                                    size=spawn_count)
-                self.predator_positions[free_indeces] = new_predator_positions
-                self.predator_angles[free_indeces] = new_predator_angles
-                self.predator_speeds[free_indeces] = 0
-                self.predator_angular_velocities[free_indeces] = 0
-                self.predator_reproduction_timers[free_indeces] = 0.0
-                self.predator_ages[free_indeces] = 5
-                self.predator_offsping_count[free_indeces] = 0.0
-                self.predator_satiety[free_indeces] = 1
-                self.predator_fitnesses[free_indeces] = 0
-                self.alive_predator_array[free_indeces] = True
-                self.predator_nn_inputs[free_indeces,self.predator_num_of_raysections*2+1] = np.random.uniform(low= -1.0,
-                                                                        high = 1.0,
-                                                                        size=spawn_count)
-                self.predator_generations[free_indeces] = 0
-                for idx in free_indeces:
-                    self.predator_brains[idx] = AnimalBrain(
-                        n_ray_sections=self.predator_num_of_raysections,
-                        n_types_of_info_in_each_section = self.num_types_of_visual_info,
-                        hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
-                        hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0]
-                        )
-                self.current_predator += spawn_count
-            
-            else: 
-                self.predator_offsping_count[parent_index] += 1
-                self.predator_fitnesses[parent_index] += 0.1 *  max((0.4+1/max(self.current_herbivore, 0.01)),1)
-                #since this option will always just spawn one animals, free indeces will always be a single number,
-                #and so will spawn count
-                parent_position = self.predator_positions[parent_index]
-                child_position = parent_position + np.random.randint(-10,10,2)
-                self.predator_positions[free_indeces] = child_position
-                self.predator_angles[free_indeces] = np.random.randint(-np.pi,np.pi,1)
-                self.predator_speeds[free_indeces] = 0
-                self.predator_angular_velocities[free_indeces] = 0
-                self.predator_reproduction_timers[free_indeces] = 0
-                self.predator_ages[free_indeces] = 0.0
-                self.predator_offsping_count[free_indeces] = 0.0
-                self.predator_satiety[free_indeces] = 1
-                self.predator_fitnesses[free_indeces] = 0
-                self.alive_predator_array[free_indeces] = True
-                self.predator_generations[free_indeces] = self.predator_generations[parent_index]+1
-                self.predator_nn_inputs[free_indeces,self.predator_num_of_raysections*2+1] = np.clip((self.predator_nn_inputs[parent_index,self.predator_num_of_raysections*2+1] + np.random.uniform(low=-self.global_mutation_strength,
+                if parent_index < 0:
+                    new_predator_positions = np.random.randint(low=[1,1], 
+                                                        high=[self.world_width-1,self.world_height-1],
+                                                        size=(spawn_count,2))
+                    new_predator_angles = np.random.uniform(low=-np.pi, 
+                                                        high=np.pi,
+                                                        size=spawn_count)
+                    self.predator_positions[free_indeces] = new_predator_positions
+                    self.predator_angles[free_indeces] = new_predator_angles
+                    self.predator_speeds[free_indeces] = 0
+                    self.predator_angular_velocities[free_indeces] = 0
+                    self.predator_reproduction_timers[free_indeces] = 0.0
+                    self.predator_ages[free_indeces] = 5
+                    self.predator_offsping_count[free_indeces] = 0.0
+                    self.predator_satiety[free_indeces] = 1
+                    self.predator_fitnesses[free_indeces] = 0
+                    self.alive_predator_array[free_indeces] = True
+                    self.predator_nn_inputs[free_indeces,self.predator_num_of_raysections*2+1] = np.random.uniform(low= -1.0,
+                                                                            high = 1.0,
+                                                                            size=spawn_count)
+                    self.predator_generations[free_indeces] = 0
+                    for idx in free_indeces:
+                        self.predator_brains[idx] = AnimalBrain(
+                            n_ray_sections=self.predator_num_of_raysections,
+                            n_types_of_info_in_each_section = self.num_types_of_visual_info,
+                            hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
+                            hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0]
+                            )
+                    self.current_predator += spawn_count
+                
+                else: 
+                    self.predator_offsping_count[parent_index] += 1
+                    self.predator_fitnesses[parent_index] += 0.1 *  max((0.4+1/max(self.current_herbivore, 0.01)),1)
+                    #since this option will always just spawn one animals, free indeces will always be a single number,
+                    #and so will spawn count
+                    parent_position = self.predator_positions[parent_index]
+                    child_position = parent_position + np.random.randint(-10,10,2)
+                    self.predator_positions[free_indeces] = child_position
+                    self.predator_angles[free_indeces] = np.random.randint(-np.pi,np.pi,1)
+                    self.predator_speeds[free_indeces] = 0
+                    self.predator_angular_velocities[free_indeces] = 0
+                    self.predator_reproduction_timers[free_indeces] = 0
+                    self.predator_ages[free_indeces] = 0.0
+                    self.predator_offsping_count[free_indeces] = 0.0
+                    self.predator_satiety[free_indeces] = 1
+                    self.predator_fitnesses[free_indeces] = 0
+                    self.alive_predator_array[free_indeces] = True
+                    self.predator_generations[free_indeces] = self.predator_generations[parent_index]+1
+                    self.predator_nn_inputs[free_indeces,self.predator_num_of_raysections*2+1] = np.clip((self.predator_nn_inputs[parent_index,self.predator_num_of_raysections*2+1] + np.random.uniform(low=-self.global_mutation_strength,
                                                                                                                                                                                                         high= self.global_mutation_strength,
                                                                                                                                                                                                         size=1)), 
                                                                                                                                                                                                         -1,1)
-                
-                child_brain = copy.deepcopy(self.predator_brains[parent_index])
-                sizes = child_brain.get_dim_sizes()
-                for dimension, index in zip(["fc1","fc2"],[0,1]):
-                    if np.random.uniform(low=0.0,high=1.0,size=1)[0] <= self.global_mutation_rate:
-                        child_brain = resize_layer_in_animal_brain(child_brain,
+                    
+                    child_brain = copy.deepcopy(self.predator_brains[parent_index])
+                    sizes = child_brain.get_dim_sizes()
+                    for dimension, index in zip(["fc1","fc2"],[0,1]):
+                        if np.random.uniform(low=0.0,high=1.0,size=1)[0] <= self.global_mutation_rate:
+                            child_brain = resize_layer_in_animal_brain(child_brain,
                                                                 layer=dimension,
                                                                 new_size=np.clip((sizes[index]+np.random.choice([-1,1])),a_min=1,a_max=20),
                                                                 init_std=0.5)
-                child_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
-                self.predator_brains[free_indeces] = child_brain
-                self.current_predator += spawn_count
-                self.predator_reproduction_timers[parent_index] = 0.0
-                self.predator_satiety[parent_index] -= self.predator_reproduction_satiety_loss
+                    child_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+                    self.predator_brains[free_indeces] = child_brain
+                    self.current_predator += spawn_count
+                    self.predator_reproduction_timers[parent_index] = 0.0
+                    self.predator_satiety[parent_index] -= self.predator_reproduction_satiety_loss
     
     def resurrect_predators(self, spawn_count):
 
@@ -834,165 +995,6 @@ class World:
             self.current_predator = spawn_count
 
 
-########## ----------------------------------------------------------- DRAWING ---------------------------------------------------------###########
-########## ----------------------------------------------------------- DRAWING ---------------------------------------------------------###########
-########## ----------------------------------------------------------- DRAWING ---------------------------------------------------------###########
-    def draw(self,display_window):
-        self.draw_plants(display_window)
-        self.draw_herbivores(display_window)
-        self.draw_predators(display_window)
-        self.draw_section_vision_for_selected_animal(display_window)
-                                                     
-    def draw_plants(self, display_window):
-        alive_plant_indices = np.where(self.alive_plant_array)[0]
-        for index in alive_plant_indices:
-            plant_position = self.plant_positions[index]
-            pg.draw.circle(display_window, (17, 50, 174), plant_position.astype(int), radius = self.plant_size)
-
-    def draw_herbivores(self, display_window):
-        alive_herbivore_indices = np.where(self.alive_herbivore_array)[0]
-        
-
-        angles_degrees = -np.degrees(self.herbivore_angles[alive_herbivore_indices]) - 90  # (N_alive,)
-        satiety_ratios = self.herbivore_satiety[alive_herbivore_indices] / self.herbivore_max_satiety
-        tint_greens = np.clip((satiety_ratios * 255).astype(int), 0, 255)
-
-        # === Draw each alive herbivore ===
-        for pos, angle_deg, green_value in zip(self.herbivore_positions[alive_herbivore_indices], angles_degrees, tint_greens):
-            # Draw satiety tint ring
-            #pg.draw.circle(display_window, (50, green_value, 30), pos, radius=self.herbivore_size + 2, width=2)
-
-            # Rotate sprite to face direction
-            rotated_sprite = pg.transform.rotate(self.herbivore_sprite, angle_deg)
-            sprite_rect = rotated_sprite.get_rect(center=pos)
-
-            # Blit rotated sprite
-            display_window.blit(rotated_sprite, sprite_rect)
-
-    def draw_herbivores_light(self, display_window):
-        alive_herbivore_indices = np.where(self.alive_herbivore_array)[0]
-        for index in alive_herbivore_indices:
-            herbivore_position = self.herbivore_positions[index]
-            pg.draw.circle(display_window, (50, clamp(self.herbivore_satiety[index]*255, 0,255), 30), herbivore_position.astype(int), radius = self.herbivore_size)
-
-    
-    def draw_predators(self, display_window):
-        alive_predator_indices = np.where(self.alive_predator_array)[0]
-        
-        
-        angles_degrees = -np.degrees(self.predator_angles[alive_predator_indices]) - 90  # (N_alive,)
-        satiety_ratios = self.predator_satiety[alive_predator_indices] / self.predator_max_satiety
-        tint_reds = np.clip((satiety_ratios * 255).astype(int), 0, 255)
-
-        # === Draw each alive herbivore ===
-        for pos, angle_deg, red_value in zip(self.predator_positions[alive_predator_indices], angles_degrees, tint_reds):
-            # Draw satiety tint ring
-            #pg.draw.circle(display_window, (red_value, 50, 30), pos, radius=self.predator_size + 2, width=2)
-
-            # Rotate sprite to face direction
-            rotated_sprite = pg.transform.rotate(self.predator_sprite, angle_deg)
-            sprite_rect = rotated_sprite.get_rect(center=pos)
-
-            # Blit rotated sprite
-            display_window.blit(rotated_sprite, sprite_rect)
-
-    
-    def draw_predators_light(self, display_window):
-        alive_predator_indices = np.where(self.alive_predator_array)[0]
-        for index in alive_predator_indices:
-            position = self.predator_positions[index]
-            pg.draw.circle(display_window,(clamp(self.predator_satiety[index]*255, 0,255),50,30) , position.astype(int), radius = self.predator_size)
-    
-    def draw_section_vision_for_selected_animal(
-    self,
-    display_window,
-    overlap_percent=0.08,
-    closeby_percent=0.1,
-    draw_sectors_under_closeby=True
-    ):
-
-
-        # Determine which animal is selected
-        if self.selected_herbivore_index is not None and self.alive_herbivore_array[self.selected_herbivore_index]:
-            idx = self.selected_herbivore_index
-            pos = self.herbivore_positions[idx].astype(int)
-            heading = self.herbivore_angles[idx]
-            vision_range = self.herbivore_vision_range
-            fov = self.herbivore_FOV
-            num_sections = self.herbivore_num_of_raysections
-            distances = self.herbivore_nn_inputs[idx, 0:num_sections + 1]
-            labels = self.herbivore_nn_inputs[idx, num_sections + 1:(num_sections + 1) * 2]
-
-        elif self.selected_predator_index is not None and self.alive_predator_array[self.selected_predator_index]:
-            idx = self.selected_predator_index
-            pos = self.predator_positions[idx].astype(int)
-            heading = self.predator_angles[idx]
-            vision_range = self.predator_vision_range
-            fov = self.predator_FOV
-            num_sections = self.predator_num_of_raysections
-            distances = self.predator_nn_inputs[idx, 0:num_sections + 1]
-            labels = self.predator_nn_inputs[idx, num_sections + 1:(num_sections + 1) * 2]
-        else:
-            return  # Nothing selected
-
-        # Draw yellow circle outline
-        pg.draw.circle(display_window, (255, 255, 0), pos, 15, width=2)
-
-        if not self.show_raycast:
-            return
-
-        s = pg.Surface(display_window.get_size(), pg.SRCALPHA)
-
-        # === Draw closeby zone first if underlay, else later ===
-        closeby_radius = closeby_percent * vision_range
-        dist_closeby = distances[0]
-        label_closeby = labels[0]
-
-        
-
-        if draw_sectors_under_closeby:
-            # Draw closeby first so sectors appear under
-            color_closeby = get_color_from_label(label_closeby)
-            pg.draw.circle(s, color_closeby, pos, int(closeby_radius))
-
-        # === Sector drawing ===
-        effective_fov = fov * (1 + overlap_percent)
-        section_edges = np.linspace(-effective_fov / 2, effective_fov / 2, num_sections + 1)
-
-        cos_edges = np.cos(heading + section_edges)
-        sin_edges = np.sin(heading + section_edges)
-
-        min_radius_frac = 0.05  # minimal visible radius
-
-        for sec in range(1, num_sections + 1):  # skip 0, which is the closeby
-            dist = distances[sec]
-            label = labels[sec]
-
-            color = get_color_from_label(label)
-            radius = max(min_radius_frac * vision_range, (1 - dist) * vision_range)
-
-            # If skipping sectors inside closeby zone:
-            if not draw_sectors_under_closeby and radius <= closeby_radius:
-                continue
-
-            angle_left_cos = cos_edges[sec - 1]
-            angle_left_sin = sin_edges[sec - 1]
-            angle_right_cos = cos_edges[sec]
-            angle_right_sin = sin_edges[sec]
-
-            p0 = pos
-            p1 = pos + radius * np.array([angle_left_cos, angle_left_sin])
-            p2 = pos + radius * np.array([angle_right_cos, angle_right_sin])
-
-            pg.draw.polygon(s, color, [p0, p1.astype(int), p2.astype(int)])
-
-        # Draw closeby zone last if overlay
-        if not draw_sectors_under_closeby:
-            color_closeby = get_color_from_label(label_closeby)
-            pg.draw.circle(s, color_closeby, pos, int(closeby_radius))
-
-        display_window.blit(s, (0, 0))
-    
     def show_herbivore_stats(self, herb_idx, root):
         brain = self.herbivore_brains[herb_idx]
         sizes = brain.get_dim_sizes()
@@ -1012,16 +1014,7 @@ class World:
         Hidden dimension 1 size: {round(sizes[0])}
         Hidden dimension 2 size: {round(sizes[1])}
         """
-        if hasattr(self, 'stats_window') and self.stats_window.winfo_exists():
-            self.stats_label.config(text=stats)
-        else:
-            self.stats_window = tk.Toplevel(root)  # Use Toplevel instead of Tk()
-            self.stats_window.title(f"Herbivore {herb_idx} Stats")
-            self.stats_label = tk.Label(self.stats_window, text=stats, justify='left', font=("Courier", 10))
-            self.stats_label.pack(padx=10, pady=10)
-
-            close_button = tk.Button(self.stats_window, text="Close", command=self.stats_window.destroy)
-            close_button.pack(pady=5)
+        print(stats)
     
     def show_predator_stats(self, herb_idx, root): #too laze to rename herb_idx here sorry
         brain = self.predator_brains[herb_idx]
@@ -1042,13 +1035,4 @@ class World:
         Hidden dimension 1 size: {round(sizes[0])}
         Hidden dimension 2 size: {round(sizes[1])}
         """
-        if hasattr(self, 'stats_window') and self.stats_window.winfo_exists():
-            self.stats_label.config(text=stats)
-        else:
-            self.stats_window = tk.Toplevel(root)  # Use Toplevel instead of Tk()
-            self.stats_window.title("Animal Stats")
-            self.stats_label = tk.Label(self.stats_window, text=stats, justify='left', font=("Courier", 10))
-            self.stats_label.pack(padx=10, pady=10)
-
-            close_button = tk.Button(self.stats_window, text="Close", command=self.stats_window.destroy)
-            close_button.pack(pady=5)
+        print(stats)

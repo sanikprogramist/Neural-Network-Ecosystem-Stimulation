@@ -2,6 +2,7 @@ import numpy as np
 import pandas as p
 import pygame as pg
 import time
+import fastapi
 
 
 from game_functions import *
@@ -12,24 +13,6 @@ import tkinter as tk
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-
-#TASK LIST
-# X Create World
-# X Create FPS independent timing control
-# X Spawn food system
-# X spawn herbivore system
-# X animal movement system
-# X herbivore eat plant 
-# X satiety based death of herbivores
-# X boundary handling
-# X angular velocity
-# X herbivores raycast to detect walls and food, output with shape (N_herbivore, N_ray, 2) (first number stores distance to overlapping piece of food, second to wall, 0 if nothing)
-# X Herbivores die of old age
-# X herbivores reproduce if they have enough food and enough time has passed from last reproduction
-# display herbivore stats
-# initial data
-
-# FIX REPRODUCTION GESTATION TIME OVER 100%
 
 #----------------------------------------------------
 import ctypes
