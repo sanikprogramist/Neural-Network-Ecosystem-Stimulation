@@ -159,6 +159,20 @@ class World:
             return value.item()
         return value
 
+    def _to_json_compatible(self, obj):
+        # Recursively convert numpy types and arrays to native Python types
+        if isinstance(obj, dict):
+            return {k: self._to_json_compatible(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._to_json_compatible(v) for v in obj]
+        if isinstance(obj, tuple):
+            return [self._to_json_compatible(v) for v in obj]
+        if isinstance(obj, np.generic):
+            return obj.item()
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
     def get_simulation_state(self):
         plant_indices = np.where(self.alive_plant_array)[0]
         herbivore_indices = np.where(self.alive_herbivore_array)[0]
@@ -271,17 +285,20 @@ class World:
                         "children": int(self.herbivore_offsping_count[index]),
                         "hidden_dim_1": None,
                         "hidden_dim_2": None,
+                        "network_weights": None,
                     }
-                    # if brain exists, include hidden layer sizes; otherwise return None
+                    # if brain exists, include hidden layer sizes and weights
                 if brain is not None:
                     try:
                         dims = brain.get_dim_sizes()
                         stats["hidden_dim_1"] = int(dims[0])
                         stats["hidden_dim_2"] = int(dims[1])
+                        stats["network_weights"] = brain.get_network_weights()
                     except Exception:
                         stats["hidden_dim_1"] = None
                         stats["hidden_dim_2"] = None
-                return stats
+                        stats["network_weights"] = None
+                return self._to_json_compatible(stats)
         elif species == "predator":
             if index < 0 or index >= self.max_predator or not self.alive_predator_array[index]:
                 raise IndexError("Predator index is invalid or dead")
@@ -302,16 +319,19 @@ class World:
                     "children": int(self.predator_offsping_count[index]),
                     "hidden_dim_1": None,
                     "hidden_dim_2": None,
+                    "network_weights": None,
                 }
             if brain is not None:
                 try:
                     dims = brain.get_dim_sizes()
                     stats["hidden_dim_1"] = int(dims[0])
                     stats["hidden_dim_2"] = int(dims[1])
+                    stats["network_weights"] = brain.get_network_weights()
                 except Exception:
                     stats["hidden_dim_1"] = None
                     stats["hidden_dim_2"] = None
-            return stats
+                    stats["network_weights"] = None
+            return self._to_json_compatible(stats)
         else:
             raise ValueError("Species must be 'herbivore' or 'predator'")
         

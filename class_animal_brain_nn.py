@@ -121,3 +121,22 @@ class AnimalBrain(nn.Module):
             Tuple -> (size of first hidden layer, size of second hidden layer)
         """
         return self.fc1.out_features, self.fc2.out_features
+
+    def get_network_weights(self):
+        """
+        Serialize network weights for visualization.
+
+        Returns
+        -------
+        dict
+            Contains weight matrices for each layer in list format
+        """
+        return {
+            "input_to_hidden1": self.fc1.weight.data.cpu().numpy().tolist(),
+            "hidden1_to_hidden2": self.fc2.weight.data.cpu().numpy().tolist(),
+            "hidden2_to_output": self.out.weight.data.cpu().numpy().tolist(),
+            "input_dim": self.fc1.in_features,
+            "hidden1_dim": self.fc1.out_features,
+            "hidden2_dim": self.fc2.out_features,
+            "output_dim": self.out.out_features
+        }

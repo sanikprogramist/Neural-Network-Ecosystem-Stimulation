@@ -73,7 +73,6 @@ def set_speed(req: SpeedRequest):
 
 @app.get("/animal/{species}/{index}")
 def animal_stats(species: str, index: int):
-    print(f"Fetching stats for {species} at index {index}")
     try:
         return world.get_animal_stats(species, index)
     except (IndexError, ValueError) as exc:
