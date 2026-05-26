@@ -26,8 +26,8 @@ class World:
         self.max_speed = 25
         self.max_angular_velocity = 0.8
 
-        self.global_mutation_rate = 0.075 # stable value was 0.1
-        self.global_mutation_strength = 0.15 # stable value was 0.2
+        self.global_mutation_rate = 0.025 # stable value was 0.1
+        self.global_mutation_strength = 0.03 # stable value was 0.2
         self.colour_change_strength = 15
         self.min_hidden_dim_size = 4 # starting bound - they might evolve smaller or larger
         self.max_hidden_dim_size = 10 # starting bound
