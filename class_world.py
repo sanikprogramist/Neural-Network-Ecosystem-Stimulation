@@ -9,13 +9,16 @@ from scipy.spatial import cKDTree
 from game_functions import *
 from class_animal_brain_nn import *
 
+#NOTES:
+# 1. fitness function doesnt work. As in, the fitness it calculates is meaningless
+# 2. herbivore reproduction counter going up even though pop is at max
 
 class World:
 
 
     def __init__(self):
         #globals
-        self.world_speed_multiplier = 2
+        self.world_speed_multiplier = 1
         self.world_width = 800
         self.world_height = 600
 
@@ -23,10 +26,11 @@ class World:
         self.max_speed = 25
         self.max_angular_velocity = 0.8
 
-        self.global_mutation_rate = 0.1
-        self.global_mutation_strength = 0.2
-        self.min_hidden_dim_size = 6
-        self.max_hidden_dim_size = 12
+        self.global_mutation_rate = 0.075 # stable value was 0.1
+        self.global_mutation_strength = 0.15 # stable value was 0.2
+        self.colour_change_strength = 15
+        self.min_hidden_dim_size = 4 # starting bound - they might evolve smaller or larger
+        self.max_hidden_dim_size = 10 # starting bound
 
         self.show_raycast = False
 
@@ -78,12 +82,14 @@ class World:
         self.alive_plant_array = np.zeros(self.max_plant,dtype=bool)
         self.plant_reproduction_timer_accumulator = 0.0
 
+
         self.herbivore_positions = np.zeros((self.max_herbivore,2))
         self.herbivore_angles = np.zeros((self.max_herbivore,))
         self.herbivore_speeds = np.zeros((self.max_herbivore,))
         #self.herbivore_accelerations = np.zeros((self.max_herbivore,))
         #self.herbivore_angular_accelerations = np.zeros((self.max_herbivore,))
         self.herbivore_angular_velocities = np.zeros((self.max_herbivore,))
+        self.herbivore_colours = np.zeros((self.max_herbivore,3))
         self.herbivore_satiety = np.zeros((self.max_herbivore,))
         self.alive_herbivore_array = np.zeros(self.max_herbivore,dtype=bool)
         self.num_types_of_visual_info = 2
@@ -105,6 +111,7 @@ class World:
         #self.herbivore_accelerations = np.zeros((self.max_predator,))
         #self.herbivore_angular_accelerations = np.zeros((self.max_predator,))
         self.predator_angular_velocities = np.zeros((self.max_predator,))
+        self.predator_colours = np.zeros((self.max_predator,3))
         self.predator_satiety = np.zeros((self.max_predator,))
         self.alive_predator_array = np.zeros(self.max_predator,dtype=bool)
         self.predator_nn_inputs = np.zeros((self.max_predator, (1+self.predator_num_of_raysections)*self.num_types_of_visual_info+2),dtype=np.float32)
@@ -195,6 +202,9 @@ class World:
                 "y": float(self.herbivore_positions[i, 1]),
                 "angle": float(self.herbivore_angles[i]),
                 "speed": float(self.herbivore_speeds[i]),
+                "red": int(self.herbivore_colours[i,0]),
+                "green": int(self.herbivore_colours[i,1]),
+                "blue": int(self.herbivore_colours[i,2]),
                 "satiety": float(self.herbivore_satiety[i]),
                 "age": float(self.herbivore_ages[i]),
                 "generation": int(self.herbivore_generations[i]),
@@ -213,6 +223,9 @@ class World:
             "y": float(self.predator_positions[i, 1]),
             "angle": float(self.predator_angles[i]),
             "speed": float(self.predator_speeds[i]),
+            "red": int(self.predator_colours[i,0]),
+            "green": int(self.predator_colours[i,1]),
+            "blue": int(self.predator_colours[i,2]),
             "satiety": float(self.predator_satiety[i]),
             "age": float(self.predator_ages[i]),
             "generation": int(self.predator_generations[i]),
@@ -537,16 +550,16 @@ class World:
             self_vision_range = self.herbivore_vision_range,
             self_fov = self.herbivore_FOV)
         # disarabilities are 1 for food, 0 for otehr herbivores, -0.5 for nothing and -1 for predators
-        # distances_sections: (N_alive, 5)
-        # desirabilities_sections: (N_alive, 5)
+        # distances_sections: (N_alive, num_raysections)
+        # desirabilities_sections: (N_alive, num_raysections)
         
-        # Direct write distances to columns 0:5
+        # Direct write distances to columns 0:num_raysections
         self.herbivore_nn_inputs[alive_indices, 0:self.herbivore_num_of_raysections+1] = distances_sections
 
-        # Direct write desirabilities to columns 5:10
+        # Direct write desirabilities to columns num_raysections:2*num_raysections
         self.herbivore_nn_inputs[alive_indices, self.herbivore_num_of_raysections+1:self.herbivore_num_of_raysections*2+2] = desirabilities_sections
 
-        # Satiety normalized to column 10
+        # Satiety normalized to column num_raysections*2+1
         self.herbivore_nn_inputs[alive_indices, self.herbivore_num_of_raysections*2+2] = self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety 
     
     def herbivores_process_NN(self):
@@ -655,10 +668,10 @@ class World:
             available_slots = np.sum(np.invert(self.alive_herbivore_array))
             spawn_count = min(how_many_to_spawn, available_slots)
 
-            if spawn_count > 0:
+            if spawn_count > 0: # if there are actually free slots to spawn AND new herbivores that need spawning, then spawn
                 free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
 
-                if parent_index < 0:
+                if parent_index < 0: # if parent index is less than 0, it means we are spawning randomly (not from a parent), so we will spawn in random positions and with random brains
                     new_herbivore_positions = np.random.randint(low=[1,1], 
                                                         high=[self.world_width-1,self.world_height-1],
                                                         size=(spawn_count,2))
@@ -669,6 +682,7 @@ class World:
                     self.herbivore_angles[free_indeces] = new_herbivore_angles
                     self.herbivore_speeds[free_indeces] = 0
                     self.herbivore_angular_velocities[free_indeces] = 0
+                    self.herbivore_colours[free_indeces] = np.random.randint(0,255,size=(spawn_count,3))
                     self.herbivore_reproduction_timers[free_indeces] = 0.0
                     self.herbivore_ages[free_indeces] = 5
                     self.herbivore_fitnesses[free_indeces] = 0
@@ -695,6 +709,8 @@ class World:
                     parent_position = self.herbivore_positions[parent_index]
                     child_position = parent_position + np.random.randint(0,1,2)
                     self.herbivore_positions[free_indeces] = child_position
+                    # we need to add gaussian noise multiplied bz self.mutation_strength to parent colour
+                    self.herbivore_colours[free_indeces] = self.herbivore_colours[parent_index] + np.random.normal(loc=0, scale=self.global_mutation_strength*self.colour_change_strength, size=(spawn_count,3))
                     self.herbivore_angles[free_indeces] = np.random.randint(-np.pi,np.pi,1)
                     self.herbivore_speeds[free_indeces] = 0
                     self.herbivore_angular_velocities[free_indeces] = 0
@@ -726,6 +742,7 @@ class World:
                     self.herbivore_fitnesses[parent_index] += 2 * (1/max(self.current_plant, 0.01)) * (1+0.5*self.current_predator/self.max_predator)
 
     def resurrect_herbivores(self, spawn_count):
+        # this doesnt have colours yet
 
             free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
 
@@ -930,6 +947,7 @@ class World:
                     self.predator_angles[free_indeces] = new_predator_angles
                     self.predator_speeds[free_indeces] = 0
                     self.predator_angular_velocities[free_indeces] = 0
+                    self.predator_colours[free_indeces] = np.random.randint(0,255,size=(spawn_count,3))
                     self.predator_reproduction_timers[free_indeces] = 0.0
                     self.predator_ages[free_indeces] = 5
                     self.predator_offsping_count[free_indeces] = 0.0
@@ -960,6 +978,7 @@ class World:
                     self.predator_angles[free_indeces] = np.random.randint(-np.pi,np.pi,1)
                     self.predator_speeds[free_indeces] = 0
                     self.predator_angular_velocities[free_indeces] = 0
+                    self.predator_colours[free_indeces] = self.predator_colours[parent_index] + np.random.normal(loc=0, scale=self.global_mutation_strength*self.colour_change_strength, size=(spawn_count,3))
                     self.predator_reproduction_timers[free_indeces] = 0
                     self.predator_ages[free_indeces] = 0.0
                     self.predator_offsping_count[free_indeces] = 0.0
@@ -987,6 +1006,7 @@ class World:
                     self.predator_satiety[parent_index] -= self.predator_reproduction_satiety_loss
     
     def resurrect_predators(self, spawn_count):
+        # doesnt have colours yet
 
             free_indeces = self.get_free_indices(self.alive_predator_array,spawn_count)
 

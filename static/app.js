@@ -9,10 +9,8 @@ const stepButton = document.getElementById('stepButton');
 
 let running = true;
 let lastState = null;
-let prevState = null;
-let intervalId = null;
-const stepIntervalMs = 120;
-const dt = 0.04;
+let lastTickTime = performance.now();
+//const dt = 0.04;
 let selectedAnimal = null;
 
 async function fetchState() {
@@ -20,7 +18,7 @@ async function fetchState() {
     return response.json();
 }
 
-async function stepWorld() {
+async function stepWorld(dt) {
     const response = await fetch('/step', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,10 +63,10 @@ function drawState(state) {
     }
 
     if (Array.isArray(state.herbivores)) {
-        ctx.fillStyle = '#1f6ecb';
         state.herbivores.forEach((herbivore) => {
             ctx.beginPath();
             ctx.arc(screenX(herbivore.x), screenY(herbivore.y), 6, 0, Math.PI * 2);
+            ctx.fillStyle = `rgb(${herbivore.red}, ${herbivore.green}, ${herbivore.blue})`;
             ctx.fill();
             if (typeof herbivore.angle === 'number') {
                 const dirX = Math.cos(herbivore.angle) * 10;
@@ -84,43 +82,73 @@ function drawState(state) {
     }
 
     if (Array.isArray(state.predators)) {
-        ctx.fillStyle = '#d43f3f';
         state.predators.forEach((predator) => {
+
+            const x = screenX(predator.x);
+            const y = screenY(predator.y);
+
+            ctx.save();
+
+            // Move origin to predator
+            ctx.translate(x, y);
+
+            // Rotate to face movement direction
+            ctx.rotate(predator.angle);
+
+            // Draw triangle
             ctx.beginPath();
-            ctx.arc(screenX(predator.x), screenY(predator.y), 8, 0, Math.PI * 2);
+
+            // Front point
+            ctx.moveTo(12, 0);
+
+            // Back bottom
+            ctx.lineTo(-8, 6);
+
+            // Back top
+            ctx.lineTo(-8, -6);
+
+            ctx.closePath();
+
+            ctx.fillStyle = `rgb(${predator.red}, ${predator.green}, ${predator.blue})`;
             ctx.fill();
-            if (typeof predator.angle === 'number') {
-                const dirX = Math.cos(predator.angle) * 12;
-                const dirY = Math.sin(predator.angle) * 12;
-                ctx.strokeStyle = '#8b1f1f';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(screenX(predator.x), screenY(predator.y));
-                ctx.lineTo(screenX(predator.x + dirX), screenY(predator.y + dirY));
-                ctx.stroke();
-            }
+
+            ctx.restore();
         });
     }
 
-    if (selectedAnimal) {
-        // Detect if the selected animal died or was replaced since the last tick
-        const prevList = prevState ? (selectedAnimal.species === 'predator' ? prevState.predators : prevState.herbivores) : null;
-        const prevAnimal = (prevList || []).find((item) => item.id === selectedAnimal.id);
+    //if (Array.isArray(state.predators)) {
+    //    state.predators.forEach((predator) => {
+    //          ctx.beginPath();
+    //        ctx.arc(screenX(predator.x), screenY(predator.y), 8, 0, Math.PI * 2);
+    //        ctx.fillStyle = `rgb(${predator.red}, ${predator.green}, ${predator.blue})`;
+    //        ctx.fill();
+    //        if (typeof predator.angle === 'number') {
+    //            const dirX = Math.cos(predator.angle) * 12;
+    //            const dirY = Math.sin(predator.angle) * 12;
+    //            ctx.strokeStyle = '#8b1f1f';
+    //            ctx.lineWidth = 2;
+    //            ctx.beginPath();
+    //            ctx.moveTo(screenX(predator.x), screenY(predator.y));
+    //            ctx.lineTo(screenX(predator.x + dirX), screenY(predator.y + dirY));
+    //            ctx.stroke();
+    //        }
+    //    });
+    //}
 
+
+    if (selectedAnimal) {
         const currentList = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
         const currentAnimal = (currentList || []).find((item) => item.id === selectedAnimal.id);
 
-        if (prevAnimal) {
-            // If it existed previously but no longer exists, or generation changed, clear selection
-            if (!currentAnimal || (currentAnimal.generation !== undefined && prevAnimal.generation !== undefined && currentAnimal.generation !== prevAnimal.generation)) {
-                selectedAnimal = null;
-                updateStatsPanel('Click a herbivore or predator to view stats.');
-                drawNeuralNetwork(null);
-            }
-        }
-
-        // Draw selection circle only if still selected and present
-        if (selectedAnimal && currentAnimal) {
+        if (!currentAnimal) {
+            selectedAnimal = null;
+            updateStatsPanel('Click a herbivore or predator to view stats.');
+            drawNeuralNetwork(null);
+        } else if (selectedAnimal.generation !== undefined && currentAnimal.generation !== selectedAnimal.generation) {
+            selectedAnimal = null;
+            updateStatsPanel('Click a herbivore or predator to view stats.');
+            drawNeuralNetwork(null);
+        } else {
             const pos = { x: currentAnimal.x, y: currentAnimal.y };
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
@@ -136,8 +164,13 @@ function drawState(state) {
         statusEl.textContent = `Plants: ${state.plants?.length || 0} | Herbivores: ${state.herbivores?.length || 0} | Predators: ${state.predators?.length || 0}`;
     }
 
-    // Note: stats panel will only be updated when full stats are fetched from the server
-    // This avoids briefly showing instant local state that duplicates the detailed fetch results.
+    if (selectedAnimal) {
+        const list = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
+        const current = (list || []).find((a) => a.id === selectedAnimal.id);
+        if (current) {
+            updateStatsPanel(formatStats(current));
+        }
+    }
 }
 
 function getCanvasPos(event) {
@@ -156,10 +189,6 @@ function worldFromCanvas(screenX, screenY, worldWidth, worldHeight) {
 }
 
 function formatStats(stats) {
-    let brainArchitecture = '';
-    if (stats.hidden_dim_1 !== undefined && stats.hidden_dim_1 !== null) {
-        brainArchitecture = `<br><strong>Brain Architecture:</strong><br>Input Layer: ${stats.species === 'herbivore' ? 23 : 13}<br>Hidden Layer 1: ${stats.hidden_dim_1}<br>Hidden Layer 2: ${stats.hidden_dim_2}<br>Output Layer: 2`;
-    }
     return `
         <strong>${stats.species.charAt(0).toUpperCase() + stats.species.slice(1)} #${stats.id}</strong><br>
         Position: (${stats.x.toFixed(1)}, ${stats.y.toFixed(1)})<br>
@@ -168,7 +197,7 @@ function formatStats(stats) {
         Satiety: ${stats.satiety.toFixed(2)}<br>
         Generation: ${stats.generation}<br>
         Fitness: ${stats.fitness.toFixed(2)}<br>
-        Reproduction: ${(stats.reproduction_progress * 100).toFixed(0)}%${brainArchitecture}
+        Reproduction: ${(stats.reproduction_progress * 100).toFixed(0)}%
     `;
 }
 
@@ -229,17 +258,19 @@ function drawNeuralNetwork(weights) {
         for (let to = 0; to < to_dim; to++) {
             for (let from = 0; from < from_dim; from++) {
                 const weight = weights_matrix[to][from];
-                const strength = Math.abs(weight);
-                const color = weight > 0 ? 'rgba(0, 200, 0,' : 'rgba(200, 0, 0,';
-                const alpha = Math.min(strength / 2, 0.8);
-                const thickness = Math.max(0.5, strength * 3);
+                const normalized = Math.max(-1, Math.min(1, weight));
+                const red = Math.round(Math.max(0, -normalized) * 255);
+                const green = Math.round(Math.max(0, normalized) * 255);
+                const alpha = Math.abs(weight) > 0.01 ? Math.min(1, Math.abs(weight)) : 0; // hide very weak connections
+                const thickness = Math.abs(weight) * 6;
+                const color = `rgba(${red}, ${green}, 0, ${alpha})`;
 
                 const x1 = layers[from_layer].x;
                 const y1 = getNodeY(from_layer, from);
                 const x2 = layers[to_layer].x;
                 const y2 = getNodeY(to_layer, to);
 
-                networkCtx.strokeStyle = color + alpha + ')';
+                networkCtx.strokeStyle = color;
                 networkCtx.lineWidth = thickness;
                 networkCtx.beginPath();
                 networkCtx.moveTo(x1, y1);
@@ -332,12 +363,18 @@ canvas.addEventListener('click', async (event) => {
     }
 
     // Select new animal and initialize panel from current state; fetch detailed stats in background
-    selectedAnimal = { species: selection.species, id: selection.id };
+    const instant = (selection.species === 'predator' ? (lastState.predators || []) : (lastState.herbivores || [])).find((a) => a.id === selection.id);
+    selectedAnimal = {
+        species: selection.species,
+        id: selection.id,
+        generation: instant?.generation,
+    };
     // Fetch full stats (may include extra fields) and update panel when ready
     console.log(`Fetching full stats for ${selection.species} ${selection.id}`);
     fetchAnimalStats(selection.species, selection.id)
         .then((stats) => {
             console.log('Received full stats:', stats);
+            selectedAnimal.generation = stats.generation;
             updateStatsPanel(formatStats(stats));
             drawNeuralNetwork(stats.network_weights);
         })
@@ -348,34 +385,44 @@ canvas.addEventListener('click', async (event) => {
 });
 
 async function tick() {
+    const now = performance.now();
+    const dt = (now - lastTickTime) / 1000;
+    lastTickTime = now;
+
     try {
-        const state = await stepWorld();
-        // keep previous state for death detection
-        prevState = lastState;
+        const state = await stepWorld(dt);
+
         lastState = state;
         drawState(state);
+
     } catch (error) {
-        // Surface the error but keep the simulation loop running.
         statusEl.textContent = 'Error updating simulation — retrying...';
         console.error('Tick error:', error);
-        // Do not stop the loop; leave lastState as-is so UI remains interactive.
+    }
+}
+
+
+async function loop() {
+    while (running) {
+        await tick();
     }
 }
 
 function startLoop() {
-    if (intervalId !== null) return;
-    intervalId = setInterval(tick, stepIntervalMs);
-    toggleButton.textContent = 'Pause';
+    if (running) return;
+
     running = true;
+
+    lastTickTime = performance.now();
+
+    toggleButton.textContent = 'Pause';
+
+    loop();
 }
 
 function stopLoop() {
-    if (intervalId !== null) {
-        clearInterval(intervalId);
-        intervalId = null;
-    }
-    toggleButton.textContent = 'Start';
     running = false;
+    toggleButton.textContent = 'Start';
 }
 
 toggleButton.addEventListener('click', () => {
@@ -390,7 +437,14 @@ stepButton.addEventListener('click', async () => {
     if (running) {
         stopLoop();
     }
-    await tick();
+    try {
+        const state = await stepWorld(0.04);
+        lastState = state;
+        drawState(state);
+    } catch (error) {
+        statusEl.textContent = 'Error during step';
+        console.error('Step error:', error);
+    }
 });
 
 window.addEventListener('load', async () => {
