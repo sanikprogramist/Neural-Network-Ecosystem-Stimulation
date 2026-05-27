@@ -10,6 +10,134 @@ EMPTY_LABEL = -0.5
 def clamp(n, smallest, largest): 
     return max(smallest, min(n, largest))
 
+def find_nearest_visible_target(
+    observer_positions,    # (N, 2) — positions of N observers
+    observer_angles,       # (N,) — heading angles in radians
+    target_positions,      # (T, 2) — positions of T potential targets
+    vision_range,          # scalar
+    vision_fov,            # scalar, radians
+    exclude_self=False     # bool, whether to exclude targets at the same position as observers (for conspecific detection)
+):
+    """
+    For each observer, find the nearest visible target.
+    
+    Args:
+        observer_positions: (N, 2)
+        observer_angles: (N,) heading in radians
+        target_positions: (T, 2)
+        vision_range: scalar
+        vision_fov: scalar, full field of view in radians
+    
+    Returns:
+        norm_dist: (N,) — normalised distance 1 - dist/vision_range, or -1 if nothing visible
+        norm_angle: (N,) — normalised angle relative to heading, in range [-1, 1], or 0 if nothing visible
+    """
+    N = observer_positions.shape[0]
+    half_fov = vision_fov / 2.0
+ 
+    norm_dist  = np.full(N, -1.0, dtype=np.float32)
+    norm_angle = np.zeros(N, dtype=np.float32)
+ 
+    if target_positions.shape[0] == 0:
+        return norm_dist, norm_angle
+ 
+    # Pairwise differences: (N, T, 2)
+    diffs = target_positions[np.newaxis, :, :] - observer_positions[:, np.newaxis, :]
+ 
+    # Pairwise distances: (N, T)
+    dists = np.linalg.norm(diffs, axis=2)
+ 
+    # Pairwise angles relative to each observer's heading: (N, T)
+    abs_angles = np.arctan2(diffs[:, :, 1], diffs[:, :, 0])
+    rel_angles = abs_angles - observer_angles[:, np.newaxis]
+    
+    # Wrap to [-pi, pi]
+    rel_angles = (rel_angles + np.pi) % (2 * np.pi) - np.pi
+ 
+    # Visibility: within range and within FOV
+    visible = (dists <= vision_range) & (np.abs(rel_angles) <= half_fov)
+    
+    if exclude_self:
+        np.fill_diagonal(visible, False)
+ 
+    # Mask out non-visible with inf so argmin ignores them
+    masked_dists = np.where(visible, dists, np.inf)
+ 
+    # Find nearest visible target for each observer
+    nearest_idx = np.argmin(masked_dists, axis=1)  # (N,)
+    nearest_dist = masked_dists[np.arange(N), nearest_idx]  # (N,)
+ 
+    # Check which observers found anything
+    any_visible = nearest_dist < np.inf
+ 
+    # Normalised distance: 1 - dist/vision_range, or -1 if nothing found
+    norm_dist = np.where(
+        any_visible,
+        1.0 - nearest_dist / vision_range,
+        -1.0
+    ).astype(np.float32)
+ 
+    # Normalised angle: relative angle / half_fov, clamped to [-1, 1], or 0 if nothing found
+    nearest_angle = rel_angles[np.arange(N), nearest_idx]  # (N,)
+    norm_angle = np.where(
+        any_visible,
+        np.clip(nearest_angle / half_fov, -1.0, 1.0),
+        0.0
+    ).astype(np.float32)
+ 
+    return norm_dist, norm_angle
+
+def herbivores_perception_function(
+    self_positions,       # (N, 2)
+    self_angles,          # (N,)
+    food_positions,       # (F, 2) — already filtered to alive plants
+    predator_positions,   # (P, 2) — already filtered to alive predators
+    vision_range,         # scalar
+    vision_fov,           # scalar, radians
+):
+    """
+    Compute perception inputs for N herbivores.
+    
+    Returns array of shape (N, 6):
+        [dist_plant, angle_plant,
+         dist_conspecific, angle_conspecific,
+         dist_predator, angle_predator]
+    
+    dist values: 1 - dist/vision_range if detected, -1 if nothing seen
+    angle values: relative to heading, normalised to [-1, 1] over FOV
+                  0.0 if nothing seen
+    """
+    N = self_positions.shape[0]
+    output = np.zeros((N, 6), dtype=np.float32)
+ 
+    # Plants
+    d, a = find_nearest_visible_target(
+        self_positions, self_angles, food_positions,
+        vision_range, vision_fov
+    )
+    output[:, 0] = d
+    output[:, 1] = a
+ 
+    # Conspecifics (exclude self)
+    d, a = find_nearest_visible_target(
+        self_positions, self_angles, self_positions,
+        vision_range, vision_fov,
+        exclude_self=True
+    )
+    output[:, 2] = d
+    output[:, 3] = a
+ 
+    # Predators
+    d, a = find_nearest_visible_target(
+        self_positions, self_angles, predator_positions,
+        vision_range, vision_fov
+    )
+    output[:, 4] = d
+    output[:, 5] = a
+ 
+    return output
+
+
 def predator_section_vision_self_and_food(
     self_positions,
     self_angles,            # (N_predators,) in radians
@@ -235,8 +363,7 @@ def resize_layer_in_animal_brain(
     preserving existing weights where possible, initializing new weights, and clipping all weights.
     """
     # Extract initialization parameters
-    n_ray_sections = (brain.fc1.in_features - 2) // 1 - 1  # since n_types_of_info_in_each_section = 1
-    n_types_of_info_in_each_section = 1
+    input_dim = brain.fc1.in_features
     hidden_dim_1 = brain.fc1.out_features
     hidden_dim_2 = brain.fc2.out_features
 
@@ -250,8 +377,8 @@ def resize_layer_in_animal_brain(
 
     # Create new brain
     new_brain = AnimalBrain(
-        n_ray_sections=n_ray_sections,
-        n_types_of_info_in_each_section=n_types_of_info_in_each_section,
+        n_external_infos=input_dim,
+        n_self_infos=0,
         hidden_dim_1=hidden_dim_1,
         hidden_dim_2=hidden_dim_2
     )

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ecosystem Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -51,17 +52,42 @@
             display: block;
             margin-top: 12px;
         }
+
+        #mainLayout {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        }
+
+        #chartPanel {
+            width: 320px;
+            background: white;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        #populationChart {
+            width: 100%;
+            height: 400px;
+        }
     </style>
 </head>
 <body>
-    <h1>Ecosystem Web Visualization</h1>
+    <h1>Neural Network Ecosystem</h1>
 
     <div id="controls">
         <button id="toggleButton">Pause</button>
         <button id="stepButton">Step</button>
     </div>
 
-    <canvas id="simCanvas" width="800" height="600"></canvas>
+    <div id="mainLayout">
+        <div id="chartPanel">
+            <canvas id="populationChart"></canvas>
+        </div>
+
+        <canvas id="simCanvas" width="800" height="600"></canvas>
+    </div>
     <div id="status">Loading...</div>
     <div id="stats" style="margin-top:12px; padding:10px; border:1px solid #d0d7de; border-radius:6px; background:#ffffff; max-width:820px; font-size:13px; line-height:1.5; color:#111827;">Click a herbivore or predator to view stats.</div>
     <canvas id="networkCanvas" width="820" height="300"></canvas>

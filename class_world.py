@@ -35,7 +35,6 @@ class World:
         self.show_raycast = False
 
         #plants
-        self.starting_plant = 100
         self.max_plant = 300
         self.plant_size = 5
         self.plant_nutrition_value = 0.9
@@ -43,7 +42,6 @@ class World:
         self.plant_reproduction_interval = 5.5
 
         #predators
-        self.starting_predator = 25
         self.max_predator = 70
         self.predator_size = 5
         self.predator_satiety_loss_factor = 0.006
@@ -59,8 +57,7 @@ class World:
         self.predator_min_age_to_reproduce = 20
 
         #herbivores
-        self.starting_herbivore = 100
-        self.max_herbivore = 200
+        self.max_herbivore = 2000
         self.herbivore_size = 4
         self.herbivore_satiety_loss_factor = 0.006
         self.herbivore_max_satiety = 2
@@ -86,14 +83,17 @@ class World:
         self.herbivore_positions = np.zeros((self.max_herbivore,2))
         self.herbivore_angles = np.zeros((self.max_herbivore,))
         self.herbivore_speeds = np.zeros((self.max_herbivore,))
-        #self.herbivore_accelerations = np.zeros((self.max_herbivore,))
-        #self.herbivore_angular_accelerations = np.zeros((self.max_herbivore,))
         self.herbivore_angular_velocities = np.zeros((self.max_herbivore,))
         self.herbivore_colours = np.zeros((self.max_herbivore,3))
         self.herbivore_satiety = np.zeros((self.max_herbivore,))
         self.alive_herbivore_array = np.zeros(self.max_herbivore,dtype=bool)
-        self.num_types_of_visual_info = 2
-        self.herbivore_nn_inputs = np.zeros((self.max_herbivore, (1+self.herbivore_num_of_raysections)*self.num_types_of_visual_info+2),dtype=np.float32)
+        
+        self.herbivore_detectable_object_types = 3 # plant, conspecific, predator
+        self.herbivore_types_of_info_about_each_object = 2 # distance and angle to it
+        self.herbivore_num_external_infos = self.herbivore_detectable_object_types * self.herbivore_types_of_info_about_each_object
+        self.herbivore_self_infos = 2 # speed and satiety
+        self.herbivore_nn_inputs = np.zeros((self.max_herbivore, (self.herbivore_num_external_infos + self.herbivore_self_infos)),dtype=np.float32)
+        
         self.herbivore_reproduction_timers = np.zeros((self.max_herbivore,))
         self.herbivore_ages = np.zeros((self.max_herbivore,))
         self.herbivore_offsping_count = np.zeros((self.max_herbivore,))
@@ -114,6 +114,7 @@ class World:
         self.predator_colours = np.zeros((self.max_predator,3))
         self.predator_satiety = np.zeros((self.max_predator,))
         self.alive_predator_array = np.zeros(self.max_predator,dtype=bool)
+        self.num_types_of_visual_info = 2 # distance and desirability (which is basically whether there is a herbivore and how close it is
         self.predator_nn_inputs = np.zeros((self.max_predator, (1+self.predator_num_of_raysections)*self.num_types_of_visual_info+2),dtype=np.float32)
         self.predator_reproduction_timers = np.zeros((self.max_predator,))
         self.predator_ages = np.zeros((self.max_predator,))
@@ -210,8 +211,7 @@ class World:
                 "generation": int(self.herbivore_generations[i]),
                 "fitness": float(self.herbivore_fitnesses[i]),
                 "reproduction_progress": float(self.herbivore_reproduction_timers[i] / max(self.herbivore_gestation_time, 1)),
-                "nn_distances" : self.herbivore_nn_inputs[i,0:self.herbivore_num_of_raysections+1].tolist(),
-                "nn_desirability_labels" : self.herbivore_nn_inputs[i, self.herbivore_num_of_raysections+1:self.herbivore_num_of_raysections*2+2].tolist(),
+                "nn_distances_angles" : self.herbivore_nn_inputs[i,0:self.herbivore_num_external_infos].tolist(),
                 "fov": float(self.herbivore_FOV),
                 "vision_range": float(self.herbivore_vision_range),
             }
@@ -276,13 +276,6 @@ class World:
             "current_plant": int(self.current_plant),
             "current_herbivore": int(self.current_herbivore),
             "current_predator": int(self.current_predator),
-            "predator_death_log": [
-                {
-                    "generation": int(row["generation"]),
-                    "fitness": float(row["fitness"])
-                }
-                for _, row in self.predator_death_log.iterrows()
-            ]
         }
 
     def get_animal_stats(self, species, index):
@@ -515,8 +508,8 @@ class World:
     def update_herbivores(self,dt): # master function that includes all the rest
         self.herbivores_increment_fitness(dt)
         self.herbivores_die_of_natural_causes(dt) 
-        self.herbivores_perceive() # calculate raysection casting outputs
-        self.herbivores_process_NN() # push raysection casting outputs into the NNs, get movement parameters out
+        self.herbivores_perceive() # calculate neural network inputs
+        self.herbivores_process_NN() # push neural network inputs to the NNs, get movement parameters out
         self.herbivores_move(dt) # update new positions using the parameters from previous function
         self.check_herbivore_plant_collisions() # check if they collided with food
         self.herbivores_reproduce(dt) # check if they reproduce 
@@ -543,40 +536,27 @@ class World:
         alive_indices = np.where(self.alive_herbivore_array)[0]
         if alive_indices.size == 0:
             return
-        #ray_angles = self.herbivore_angles[self.alive_herbivore_array][:,np.newaxis]+self.herbivore_relative_ray_angles
-        #now we have an array of dimension [alive_herb, num_raycasts] with the correct raycast angles
-        #lets make an array of all the end points of the ray casts. it should have dimensions (alive_herb, num_raycasts, 2)
-        #self.herbivore_ray_directions[alive_indices,:,0] = np.cos(ray_angles)*self.herbivore_vision_range
-        #self.herbivore_ray_directions[alive_indices,:,1] = np.sin(ray_angles)*self.herbivore_vision_range
- 
-        distances_sections, desirabilities_sections = herbivores_section_vision_self_food_and_predators(
-            self_positions=self.herbivore_positions[alive_indices],
-            self_angles=self.herbivore_angles[alive_indices],
-            food_positions=self.plant_positions[self.alive_plant_array],
-            predator_positions = self.predator_positions[self.alive_predator_array],
-            self_num_of_raysections = self.herbivore_num_of_raysections,
-            self_vision_range = self.herbivore_vision_range,
-            self_fov = self.herbivore_FOV)
-        # disarabilities are 1 for food, 0 for otehr herbivores, -0.5 for nothing and -1 for predators
-        # distances_sections: (N_alive, num_raysections)
-        # desirabilities_sections: (N_alive, num_raysections)
         
-        # Direct write distances to columns 0:num_raysections
-        self.herbivore_nn_inputs[alive_indices, 0:self.herbivore_num_of_raysections+1] = distances_sections
+        #the new nn input for herbivores should be: [dist_plant, angle_plant, dist_conspecific, angle_conspecific, dist_predator, angle_predator, own_satiety, own_speed]
+        output_from_new_perception_function = herbivores_perception_function(
+            self_positions = self.herbivore_positions[alive_indices],
+            self_angles = self.herbivore_angles[alive_indices],
+            food_positions = self.plant_positions[self.alive_plant_array], 
+            predator_positions = self.predator_positions[self.alive_predator_array],
+            vision_range = self.herbivore_vision_range,
+            vision_fov = self.herbivore_FOV
+        )
 
-        # Direct write desirabilities to columns num_raysections:2*num_raysections
-        self.herbivore_nn_inputs[alive_indices, self.herbivore_num_of_raysections+1:self.herbivore_num_of_raysections*2+2] = desirabilities_sections
+        self.herbivore_nn_inputs[alive_indices,0:self.herbivore_num_external_infos] = output_from_new_perception_function
+        self.herbivore_nn_inputs[alive_indices,self.herbivore_num_external_infos:self.herbivore_num_external_infos+2] = np.stack((self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety, self.herbivore_speeds[alive_indices] / self.max_speed), axis=1)
 
-        # Satiety normalized to column num_raysections*2+1
-        self.herbivore_nn_inputs[alive_indices, self.herbivore_num_of_raysections*2+2] = self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety 
-    
     def herbivores_process_NN(self):
         alive_indices = np.where(self.alive_herbivore_array)[0]
         if alive_indices.size == 0:
             return
 
         # === Batch processing using precomputed nn_inputs ===
-        input_tensor = torch.from_numpy(self.herbivore_nn_inputs[alive_indices])  # shape (N_alive, 12)
+        input_tensor = torch.from_numpy(self.herbivore_nn_inputs[alive_indices])  # shape (N_alive, 8)
 
         # === Forward pass through each individual's brain ===
         outputs = []
@@ -697,14 +677,11 @@ class World:
                     self.herbivore_offsping_count[free_indeces] = 0.0
                     self.herbivore_satiety[free_indeces] = 1
                     self.alive_herbivore_array[free_indeces] = True
-                    self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = np.random.uniform(low= -1.0,
-                                                                            high = 1.0,
-                                                                            size=spawn_count)
                     self.herbivore_generations[free_indeces] = 0
                     for idx in free_indeces:
                         self.herbivore_brains[idx] = AnimalBrain(
-                            n_ray_sections=self.herbivore_num_of_raysections,
-                            n_types_of_info_in_each_section=self.num_types_of_visual_info,
+                            n_external_infos = self.herbivore_num_external_infos,
+                            n_self_infos=self.herbivore_self_infos,
                             hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
                             hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0]
                             )
@@ -712,7 +689,7 @@ class World:
                 
                 else: 
                     self.herbivore_offsping_count[parent_index] += 1
-                    #since this option will always just spawn one animals, free indeces will always be a single number,
+                    #since this option will always just spawn one animal, free indeces will always be a single number,
                     #and so will spawn count
                     parent_position = self.herbivore_positions[parent_index]
                     child_position = parent_position + np.random.randint(0,1,2)
@@ -729,10 +706,6 @@ class World:
                     self.herbivore_fitnesses[free_indeces] = 0
                     self.alive_herbivore_array[free_indeces] = True
                     self.herbivore_generations[free_indeces] = self.herbivore_generations[parent_index]+1
-                    self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = self.herbivore_nn_inputs[parent_index,self.herbivore_num_of_raysections*2+1] + np.clip(np.random.uniform(low=-self.global_mutation_strength,
-                                                                                                                                                                                                        high= self.global_mutation_strength,
-                                                                                                                                                                                                        size=1), 
-                                                                                                                                                                                                        -1,1)
 
                     child_brain = copy.deepcopy(self.herbivore_brains[parent_index])
                     sizes = child_brain.get_dim_sizes()
@@ -744,6 +717,9 @@ class World:
                                                                 init_std=0.5)
                     child_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
                     self.herbivore_brains[free_indeces] = child_brain
+                    assert isinstance(self.herbivore_brains[int(free_indeces[0])], AnimalBrain), \
+                        f"Brain assignment failed for index {free_indeces}, got {type(self.herbivore_brains[int(free_indeces[0])])}"
+
                     self.current_herbivore += spawn_count
                     self.herbivore_reproduction_timers[parent_index] = 0.0
                     self.herbivore_satiety[parent_index] -= self.herbivore_reproduction_satiety_loss
@@ -968,8 +944,8 @@ class World:
                     self.predator_generations[free_indeces] = 0
                     for idx in free_indeces:
                         self.predator_brains[idx] = AnimalBrain(
-                            n_ray_sections=self.predator_num_of_raysections,
-                            n_types_of_info_in_each_section = self.num_types_of_visual_info,
+                            n_external_infos = self.predator_num_of_raysections*2+1,
+                            n_self_infos=0,
                             hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
                             hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0]
                             )

@@ -32,133 +32,103 @@ async function stepWorld(dt) {
 }
 
 /**
- * Maps a desirability label value to an RGBA color string.
- * 1.0   => green  (plant)
- * 0.1   => blue   (conspecific)
- * -0.5  => grey   (empty)
- * -1.0  => red    (predator / threat)
+ * Maps a normalised distance_angle pair into canvas-space x/y offset from animal centre.
+ * norm_dist:  1 - dist/vision_range  (so 1 = right on top, 0 = at edge)
+ * norm_angle: relative angle / half_fov, in [-1, 1]
  */
-function getLabelColor(label, alpha) {
-    if (label >= 0.8) {
-        // Plant
-        return `rgba(50, 200, 80, ${alpha})`;
-    } else if (label >= 0.0) {
-        // Conspecific
-        return `rgba(80, 140, 255, ${alpha})`;
-    } else if (label >= -0.75) {
-        // Empty
-        return `rgba(160, 160, 180, ${alpha})`;
-    } else {
-        // Threat / predator
-        return `rgba(220, 50, 50, ${alpha})`;
-    }
+function visionVecToCanvas(normDist, normAngle, heading, visionRange, halfFov, scaleX, scaleY) {
+    const actualDist  = (1 - normDist) * visionRange;
+    const actualAngle = heading + normAngle * halfFov;
+    return {
+        dx: Math.cos(actualAngle) * actualDist * scaleX,
+        dy: Math.sin(actualAngle) * actualDist * scaleY,
+    };
 }
  
-
 /**
- * Draws the raysection vision overlay for the selected animal.
- * Called every tick inside drawState() when an animal is selected.
- * @param {object} animal  - animal object from state (herbivore or predator)
+ * Draws the vision overlay for the selected animal using the new nn_distances_angles format.
+ *
+ * nn_distances_angles layout:
+ *   [dist_plant, angle_plant, dist_conspecific, angle_conspecific, dist_predator, angle_predator]
+ *   dist  = 1 - d/vision_range, or -1 if not detected
+ *   angle = relative angle / half_fov in [-1, 1], or 0 if not detected
+ *
+ * Draws:
+ *   1. Transparent grey FOV cone (full visible area)
+ *   2. Green line  → nearest plant        (if detected)
+ *   3. Blue line   → nearest conspecific  (if detected)
+ *   4. Red line    → nearest predator     (if detected)
+ *
+ * @param {object} animal  - animal object from state
  * @param {number} scaleX  - world-to-canvas x scale
  * @param {number} scaleY  - world-to-canvas y scale
- * @param {object} options
- * @param {number} options.overlapPercent      - how much sectors overlap (default 0.08)
- * @param {number} options.closeby_percent     - closeby zone radius as fraction of vision_range (default 0.10)
- * @param {boolean} options.sectorsUnderCloseby - draw sectors before closeby circle (default true)
  */
-
-function drawVisionOverlay(animal, scaleX, scaleY, {
-        overlapPercent = 0.08,
-        closeby_percent = 0.10,
-        sectorsUnderCloseby = true,
-    } = {}) {
-        console.log('drawVisionOverlay called!', animal);
-        const distances = animal.nn_distances;
-        const labels = animal.nn_desirability_labels;
-        if (!distances || !labels) return;
-    
-        const numSections = distances.length - 1; // index 0 is closeby, 1..n are sectors
-        const fov = animal.fov;
-        const visionRange = animal.vision_range;
-        const heading = animal.angle;
-    
-        const cx = animal.x * scaleX;
-        const cy = animal.y * scaleY;
-    
-        // Scale the vision range into canvas pixels.
-        // Use scaleX; for non-square worlds you may want Math.min(scaleX, scaleY).
-        const visionPx = visionRange * scaleX;
-        const closebyRadius = closeby_percent * visionPx;
-        const minRadiusFrac = 0.05;
-    
-        // Effective FOV with overlap
-        const effectiveFov = fov * (1 + overlapPercent);
-        const halfFov = effectiveFov / 2;
-    
-        // Precompute sector edge angles
-        const sectionEdges = [];
-        for (let i = 0; i <= numSections; i++) {
-            sectionEdges.push(-halfFov + (i / numSections) * effectiveFov);
-        }
-    
-        ctx.save();
-    
-        // Use globalAlpha for the whole overlay so it sits lightly on the scene
-        ctx.globalAlpha = 0.45;
-    
-        const drawCloseby = () => {
-            const dist = distances[0];
-            const label = labels[0];
-            const color = getLabelColor(label, 1.0);
-            ctx.beginPath();
-            ctx.arc(cx, cy, closebyRadius, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
-        };
-    
-        const drawSectors = () => {
-            for (let sec = 1; sec <= numSections; sec++) {
-                const dist = distances[sec];
-                const label = labels[sec];
-                const color = getLabelColor(label, 1.0);
-    
-                const radius = Math.max(minRadiusFrac * visionPx, (1 - dist) * visionPx);
-    
-                // Skip sectors that sit entirely inside the closeby zone
-                if (!sectorsUnderCloseby && radius <= closebyRadius) continue;
-    
-                const leftAngle  = heading + sectionEdges[sec - 1];
-                const rightAngle = heading + sectionEdges[sec];
-    
-                const p1x = cx + radius * Math.cos(leftAngle);
-                const p1y = cy + radius * Math.sin(leftAngle);
-                const p2x = cx + radius * Math.cos(rightAngle);
-                const p2y = cy + radius * Math.sin(rightAngle);
-    
-                ctx.beginPath();
-                ctx.moveTo(cx, cy);
-                ctx.lineTo(p1x, p1y);
-                ctx.lineTo(p2x, p2y);
-                ctx.closePath();
-                ctx.fillStyle = color;
-                ctx.fill();
-            }
-        };
-    
-        if (sectorsUnderCloseby) {
-            drawSectors();
-            drawCloseby();
-        } else {
-            drawCloseby();
-            drawSectors();
-        }
-    
-        ctx.restore();
-    }
+function drawVisionOverlay(animal, scaleX, scaleY) {
+    const data = animal.nn_distances_angles;
+    if (!data || data.length < 6) return;
+ 
+    const fov         = animal.fov;
+    const visionRange = animal.vision_range;
+    const heading     = animal.angle;
+    const halfFov     = fov / 2;
+ 
+    const cx = animal.x * scaleX;
+    const cy = animal.y * scaleY;
+    const visionPx = visionRange * scaleX;
+ 
+    ctx.save();
+ 
+    // ── 1. FOV cone ───────────────────────────────────────────────────────────
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, visionPx, heading - halfFov, heading + halfFov);
+    ctx.closePath();
+    ctx.fillStyle   = 'rgba(200, 200, 210, 0.18)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(160, 160, 180, 0.35)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+ 
+    // ── 2. Detection lines ────────────────────────────────────────────────────
+    const targets = [
+        { normDist: data[0], normAngle: data[1], color: '#3ecf60', label: 'plant'       },
+        { normDist: data[2], normAngle: data[3], color: '#5a9ff5', label: 'conspecific'  },
+        { normDist: data[4], normAngle: data[5], color: '#e84545', label: 'predator'     },
+    ];
+ 
+    targets.forEach(({ normDist, normAngle, color }) => {
+        if (normDist < 0) return; // nothing detected for this type
+ 
+        const { dx, dy } = visionVecToCanvas(
+            normDist, normAngle, heading, visionRange, halfFov, scaleX, scaleY
+        );
+ 
+        const tx = cx + dx;
+        const ty = cy + dy;
+ 
+        // Line from animal to detected object
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tx, ty);
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = 2;
+        ctx.globalAlpha = 0.85;
+        ctx.stroke();
+ 
+        // Small dot at the detected position
+        ctx.beginPath();
+        ctx.arc(tx, ty, 4, 0, Math.PI * 2);
+        ctx.fillStyle   = color;
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+    });
+ 
+    ctx.restore(); // resets globalAlpha and all other state
+}
 
 
 function drawState(state) {
-
+    console.log('num_herbivores:', state.herbivores?.length);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#eef3f7';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -191,12 +161,14 @@ function drawState(state) {
 
     // --- Vision overlay (drawn before animals so animals appear on top) ---
     if (selectedAnimal) {
-        console.log('Selected animal:', selectedAnimal);
         const list = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
         const current = (list || []).find((a) => a.id === selectedAnimal.id);
-        console.log('Current animal:', current);
-        if (current && current.nn_distances) {
-            drawVisionOverlay(current, scaleX, scaleY);
+        if (selectedAnimal.species === 'herbivore') {
+            if (current && current.nn_distances_angles) {
+                drawVisionOverlay(current, scaleX, scaleY);
+            }
+        } else if (selectedAnimal.species === 'predator') {
+            console.log('Vision overlay for predators not implemented yet');
         }
     }
 
@@ -254,26 +226,6 @@ function drawState(state) {
             ctx.restore();
         });
     }
-
-    //if (Array.isArray(state.predators)) {
-    //    state.predators.forEach((predator) => {
-    //          ctx.beginPath();
-    //        ctx.arc(screenX(predator.x), screenY(predator.y), 8, 0, Math.PI * 2);
-    //        ctx.fillStyle = `rgb(${predator.red}, ${predator.green}, ${predator.blue})`;
-    //        ctx.fill();
-    //        if (typeof predator.angle === 'number') {
-    //            const dirX = Math.cos(predator.angle) * 12;
-    //            const dirY = Math.sin(predator.angle) * 12;
-    //            ctx.strokeStyle = '#8b1f1f';
-    //            ctx.lineWidth = 2;
-    //            ctx.beginPath();
-    //            ctx.moveTo(screenX(predator.x), screenY(predator.y));
-    //            ctx.lineTo(screenX(predator.x + dirX), screenY(predator.y + dirY));
-    //            ctx.stroke();
-    //        }
-    //    });
-    //}
-
 
     if (selectedAnimal) {
         const currentList = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;

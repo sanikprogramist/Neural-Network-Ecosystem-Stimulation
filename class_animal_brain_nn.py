@@ -21,20 +21,32 @@ class AnimalBrain(nn.Module):
 
     def __init__(
         self, 
-        n_ray_sections: int,
-        n_types_of_info_in_each_section: int = 2,
+        n_external_infos: int,
+        n_self_infos: int,
         hidden_dim_1: int = 12,
         hidden_dim_2: int = 12
     ):
         """
         Parameters
         ----------
-        n_ray_sections : int
-            Number of raycast segments in the agent's field of view.
-            Each section encodes environmental information.
+        n_external_infos : int
+            Number of external information features the agent can perceive.
 
-        n_types_of_info_in_each_section : int, optional
-            How many distinct features are captured per raycast segment
+        n_self_infos : int
+            Number of self-related features (e.g., speed, satiety).
+
+        n_types_of_info_about_each_object : int, optional
+            How many distinct features are captured per detected object, eg distance, angle to it
+
+
+        hidden_dim_1 : int, optional
+            Dimensionality of the first hidden layer. Increasing this expands
+            representational capacity at the cost of computation.
+
+        hidden_dim_2 : int, optional
+            Dimensionality of the second hidden layer.
+
+        Notes
             (e.g., food density, predator presence). Defaults to 2.
 
         hidden_dim_1 : int, optional
@@ -47,15 +59,15 @@ class AnimalBrain(nn.Module):
         Notes
         -----
         The input dimensionality formula is:
-            (n_ray_sections + 1) * n_types_of_info + 2
-        The additional +2 captures internal agent states (e.g., current speed,
+            (n_external_infos + 1) * n_self_info
+        The additional terms capture internal agent states (e.g., current speed,
         energy level, or similar self-awareness signals).
         """
 
         super().__init__()
 
         # Calculate number of input features from perception and agent state.
-        input_dim = (n_ray_sections + 1) * n_types_of_info_in_each_section + 2
+        input_dim = n_external_infos + n_self_infos
 
         # Output: [forward_speed, angular_velocity]
         output_dim = 2
