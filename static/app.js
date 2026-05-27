@@ -31,7 +31,134 @@ async function stepWorld(dt) {
     return response.json();
 }
 
+/**
+ * Maps a desirability label value to an RGBA color string.
+ * 1.0   => green  (plant)
+ * 0.1   => blue   (conspecific)
+ * -0.5  => grey   (empty)
+ * -1.0  => red    (predator / threat)
+ */
+function getLabelColor(label, alpha) {
+    if (label >= 0.8) {
+        // Plant
+        return `rgba(50, 200, 80, ${alpha})`;
+    } else if (label >= 0.0) {
+        // Conspecific
+        return `rgba(80, 140, 255, ${alpha})`;
+    } else if (label >= -0.75) {
+        // Empty
+        return `rgba(160, 160, 180, ${alpha})`;
+    } else {
+        // Threat / predator
+        return `rgba(220, 50, 50, ${alpha})`;
+    }
+}
+ 
+
+/**
+ * Draws the raysection vision overlay for the selected animal.
+ * Called every tick inside drawState() when an animal is selected.
+ * @param {object} animal  - animal object from state (herbivore or predator)
+ * @param {number} scaleX  - world-to-canvas x scale
+ * @param {number} scaleY  - world-to-canvas y scale
+ * @param {object} options
+ * @param {number} options.overlapPercent      - how much sectors overlap (default 0.08)
+ * @param {number} options.closeby_percent     - closeby zone radius as fraction of vision_range (default 0.10)
+ * @param {boolean} options.sectorsUnderCloseby - draw sectors before closeby circle (default true)
+ */
+
+function drawVisionOverlay(animal, scaleX, scaleY, {
+        overlapPercent = 0.08,
+        closeby_percent = 0.10,
+        sectorsUnderCloseby = true,
+    } = {}) {
+        console.log('drawVisionOverlay called!', animal);
+        const distances = animal.nn_distances;
+        const labels = animal.nn_desirability_labels;
+        if (!distances || !labels) return;
+    
+        const numSections = distances.length - 1; // index 0 is closeby, 1..n are sectors
+        const fov = animal.fov;
+        const visionRange = animal.vision_range;
+        const heading = animal.angle;
+    
+        const cx = animal.x * scaleX;
+        const cy = animal.y * scaleY;
+    
+        // Scale the vision range into canvas pixels.
+        // Use scaleX; for non-square worlds you may want Math.min(scaleX, scaleY).
+        const visionPx = visionRange * scaleX;
+        const closebyRadius = closeby_percent * visionPx;
+        const minRadiusFrac = 0.05;
+    
+        // Effective FOV with overlap
+        const effectiveFov = fov * (1 + overlapPercent);
+        const halfFov = effectiveFov / 2;
+    
+        // Precompute sector edge angles
+        const sectionEdges = [];
+        for (let i = 0; i <= numSections; i++) {
+            sectionEdges.push(-halfFov + (i / numSections) * effectiveFov);
+        }
+    
+        ctx.save();
+    
+        // Use globalAlpha for the whole overlay so it sits lightly on the scene
+        ctx.globalAlpha = 0.45;
+    
+        const drawCloseby = () => {
+            const dist = distances[0];
+            const label = labels[0];
+            const color = getLabelColor(label, 1.0);
+            ctx.beginPath();
+            ctx.arc(cx, cy, closebyRadius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+        };
+    
+        const drawSectors = () => {
+            for (let sec = 1; sec <= numSections; sec++) {
+                const dist = distances[sec];
+                const label = labels[sec];
+                const color = getLabelColor(label, 1.0);
+    
+                const radius = Math.max(minRadiusFrac * visionPx, (1 - dist) * visionPx);
+    
+                // Skip sectors that sit entirely inside the closeby zone
+                if (!sectorsUnderCloseby && radius <= closebyRadius) continue;
+    
+                const leftAngle  = heading + sectionEdges[sec - 1];
+                const rightAngle = heading + sectionEdges[sec];
+    
+                const p1x = cx + radius * Math.cos(leftAngle);
+                const p1y = cy + radius * Math.sin(leftAngle);
+                const p2x = cx + radius * Math.cos(rightAngle);
+                const p2y = cy + radius * Math.sin(rightAngle);
+    
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(p1x, p1y);
+                ctx.lineTo(p2x, p2y);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+        };
+    
+        if (sectorsUnderCloseby) {
+            drawSectors();
+            drawCloseby();
+        } else {
+            drawCloseby();
+            drawSectors();
+        }
+    
+        ctx.restore();
+    }
+
+
 function drawState(state) {
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#eef3f7';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -61,6 +188,18 @@ function drawState(state) {
             ctx.fill();
         });
     }
+
+    // --- Vision overlay (drawn before animals so animals appear on top) ---
+    if (selectedAnimal) {
+        console.log('Selected animal:', selectedAnimal);
+        const list = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
+        const current = (list || []).find((a) => a.id === selectedAnimal.id);
+        console.log('Current animal:', current);
+        if (current && current.nn_distances) {
+            drawVisionOverlay(current, scaleX, scaleY);
+        }
+    }
+
 
     if (Array.isArray(state.herbivores)) {
         state.herbivores.forEach((herbivore) => {

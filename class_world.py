@@ -194,7 +194,7 @@ class World:
         ]
 
 
-        herbivores = [
+        herbivores = [ 
             {
                 "id": int(i),
                 "species": "herbivore",
@@ -210,6 +210,10 @@ class World:
                 "generation": int(self.herbivore_generations[i]),
                 "fitness": float(self.herbivore_fitnesses[i]),
                 "reproduction_progress": float(self.herbivore_reproduction_timers[i] / max(self.herbivore_gestation_time, 1)),
+                "nn_distances" : self.herbivore_nn_inputs[i,0:self.herbivore_num_of_raysections+1].tolist(),
+                "nn_desirability_labels" : self.herbivore_nn_inputs[i, self.herbivore_num_of_raysections+1:self.herbivore_num_of_raysections*2+2].tolist(),
+                "fov": float(self.herbivore_FOV),
+                "vision_range": float(self.herbivore_vision_range),
             }
             for i in herbivore_indices
         ]
@@ -231,6 +235,10 @@ class World:
             "generation": int(self.predator_generations[i]),
             "fitness": float(self.predator_fitnesses[i]),
             "reproduction_progress": float(self.predator_reproduction_timers[i] / max(self.predator_gestation_time, 1)),
+            "nn_distances" : self.predator_nn_inputs[i, 0:self.predator_num_of_raysections+1].tolist(),
+            "nn_desirability_labels" : self.predator_nn_inputs[i, self.predator_num_of_raysections+1:self.predator_num_of_raysections*2+2].tolist(),
+            "fov": float(self.predator_FOV),
+            "vision_range": float(self.predator_vision_range),
         }
             for i in predator_indices
             ]
@@ -300,7 +308,7 @@ class World:
                         "hidden_dim_2": None,
                         "network_weights": None,
                     }
-                    # if brain exists, include hidden layer sizes and weights
+                # if brain exists, include hidden layer sizes and weights
                 if brain is not None:
                     try:
                         dims = brain.get_dim_sizes()
