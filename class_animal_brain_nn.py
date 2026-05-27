@@ -77,7 +77,7 @@ class AnimalBrain(nn.Module):
         self.fc2 = nn.Linear(hidden_dim_1, hidden_dim_2, bias=False)
         self.out = nn.Linear(hidden_dim_2, output_dim, bias=False)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, return_activations: bool = False) -> torch.Tensor:
         """
         Execute a forward pass through the neural network.
 
@@ -95,10 +95,12 @@ class AnimalBrain(nn.Module):
         torch.Tensor
             Movement command tensor [speed, angular_speed]
         """
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = torch.tanh(self.out(x))
-        return x
+        h1 = F.relu(self.fc1(x))
+        h2 = F.relu(self.fc2(h1))
+        out = torch.tanh(self.out(h2))
+        if return_activations:
+            return out, h1, h2
+        return out
 
     def mutate(self, mutation_rate: float, mutation_strength: float) -> None:
         """

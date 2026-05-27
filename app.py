@@ -17,8 +17,8 @@ def serve_index():
     return FileResponse(static_dir / "index.html")
 
 world = World()
-world.spawn_food(100)
-world.spawn_herbivore(10)
+world.spawn_food(150)
+world.spawn_herbivore(50)
 world.spawn_predator(0)
 
 
@@ -80,3 +80,16 @@ def animal_stats(species: str, index: int):
     except Exception as exc:
         # Unexpected error — return 500 with detail rather than crashing
         raise HTTPException(status_code=500, detail=f"Internal error fetching animal stats: {exc}")
+
+@app.post("/select_animal")
+def select_animal(data: dict):
+
+    species = data.get("species")
+    animal_id = data.get("id")
+
+    if species == "herbivore":
+        world.selected_herbivore_index = animal_id
+    else:
+        world.selected_herbivore_index = None
+
+    return {"success": True}
