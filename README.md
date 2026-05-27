@@ -1,4 +1,4 @@
-# Ecosystem Simulation
+# OUTDATED README Ecosystem Simulation
 
 This project simulates an evolving ecosystem with herbivores, predators, and plants using neural networks and genetic algorithms. The simulation now supports a web-based frontend via FastAPI, with the legacy Pygame UI available separately.
 
