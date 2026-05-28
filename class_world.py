@@ -14,8 +14,6 @@ from class_animal_brain_nn import *
 # 2. herbivore reproduction timer is going up even though pop is at max
 # 3. current_plant, current_herbivore, current_predators are meaningless
 # 4. predator preception vision is still old version
-# 7. graph continues to accumulate points even when game is paused. add if check - if world time same as previous
-# 8. maybe animated neural network? that would be awesome but idk if its possible
 # 9. predator stats returning reproduction based on old invariable percentage
 # 10. predators still use invariable gestation time and old colour change and static life expectancy and selected predator api endpoint
 # 11. save load - just save the world object?
@@ -44,8 +42,8 @@ class World:
         self.max_plant = 300
         self.plant_size = 5
         self.plant_nutrition_value = 0.9
-        self.plant_random_spawn_interval = 2.2
-        self.plant_reproduction_interval = 5.5
+        self.plant_random_spawn_interval = 2.9 #2.2
+        self.plant_reproduction_interval = 6.5 #5.5
 
         #predators
         self.max_predator = 70
@@ -69,7 +67,7 @@ class World:
         self.herbivore_max_satiety = 2
         self.herbivore_gestation_time = 20
         self.herbivore_avg_gestation_time = 25
-        self.herbivore_gestation_time_std_dev = 10
+        self.herbivore_gestation_time_std_dev = 5
         self.herbivore_reproduction_minimum_satiety = 1.0
         self.herbivore_reproduction_satiety_loss = 0.5
         self.herbivore_max_percent_satiety_to_eat = 0.75

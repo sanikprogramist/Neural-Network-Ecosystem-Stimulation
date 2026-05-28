@@ -6,6 +6,8 @@ const networkCanvas = document.getElementById('networkCanvas');
 const networkCtx = networkCanvas.getContext('2d');
 const toggleButton = document.getElementById('toggleButton');
 const stepButton = document.getElementById('stepButton');
+const saveButton = document.getElementById('saveButton');
+const loadButton = document.getElementById('loadButton');
 const chartCtx = document.getElementById('populationChart').getContext('2d');
 
 const populationChart = new Chart(chartCtx, {
@@ -173,7 +175,6 @@ function drawVisionOverlay(animal, scaleX, scaleY) {
 
 
 function drawState(state) {
-    console.log('drawState called');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#eef3f7';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -211,13 +212,15 @@ function drawState(state) {
         if (state.selected.species === 'herbivore') {
             if (state.selected && state.selected.nn_distances_angles) {
                 drawVisionOverlay(state.selected, scaleX, scaleY);
+                drawLiveNeuralNetwork(state.selected);
+                updateStatsPanel(formatStats(state.selected)); 
             } // there are two selection logics going on and i need to fix it later
-            //if (selectedNN) {
-            //    drawLiveNeuralNetwork(selectedNN);
-            //}   
         } else if (state.selected.species === 'predator') {
             console.log('Vision overlay for predators not implemented yet');
         }
+    } else {
+        drawLiveNeuralNetwork(null);
+        updateStatsPanel('Click a herbivore or predator to view stats.');
     }
 
 
@@ -291,9 +294,6 @@ function drawState(state) {
         statusEl.textContent = `Plants: ${state.plants?.length || 0} | Herbivores: ${state.herbivores?.length || 0} | Predators: ${state.predators?.length || 0}`;
     }
 
-    if (state.selected) {
-        updateStatsPanel(formatStats(state.selected)); 
-    }
 }
 
 function getCanvasPos(event) {
@@ -361,109 +361,171 @@ function updateStatsPanel(message) {
     statsEl.innerHTML = message;
 }
 
-function drawNeuralNetwork(weights) {
-    console.log('drawNeuralNetwork called with weights:', weights);
-    if (!weights) {
+let neuralNetPulsesEnabled = false;
+ 
+// Call once after DOM loaded to wire up the toggle button
+function initNeuralNetControls() {
+    const btn = document.getElementById('pulseToggleButton');
+    if (btn) {
+        btn.textContent = 'Pulses: OFF';
+        btn.addEventListener('click', () => {
+            neuralNetPulsesEnabled = !neuralNetPulsesEnabled;
+            btn.textContent = neuralNetPulsesEnabled ? 'Pulses: ON' : 'Pulses: OFF';
+        });
+    }
+}
+ 
+function drawLiveNeuralNetwork(nn) {
+    if (!nn || !nn.hidden_dim_1 || !nn.output) {
         networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
         return;
     }
-
+ 
     const w = networkCanvas.width;
     const h = networkCanvas.height;
     const padding = 20;
-    
+    const nodeRadius = 6;
+    const t = performance.now() / 1000;
+ 
     networkCtx.clearRect(0, 0, w, h);
     networkCtx.fillStyle = '#f5f7fb';
     networkCtx.fillRect(0, 0, w, h);
-
-    const input_dim = weights.input_dim;
-    const hidden1_dim = weights.hidden1_dim;
-    const hidden2_dim = weights.hidden2_dim;
-    const output_dim = weights.output_dim;
-
-    // Layer positions (x coordinates)
-    const layerX = [
-        padding + 40,
-        padding + 40 + (w - 2*padding - 80) * 0.33,
-        padding + 40 + (w - 2*padding - 80) * 0.66,
-        w - padding - 40
-    ];
-
-    // Calculate node positions
+ 
     const layers = [
-        { dim: input_dim, x: layerX[0] },
-        { dim: hidden1_dim, x: layerX[1] },
-        { dim: hidden2_dim, x: layerX[2] },
-        { dim: output_dim, x: layerX[3] }
+        { values: nn.inputs,       x: 60 },
+        { values: nn.hidden_dim_1, x: w * 0.33 },
+        { values: nn.hidden_dim_2, x: w * 0.66 },
+        { values: nn.output,       x: w - 60 },
     ];
-
-    const nodeRadius = 5;
-
-    // Helper to get node y position
-    const getNodeY = (layer, nodeIdx) => {
-        const layer_data = layers[layer];
-        const spacing = (h - 2*padding) / Math.max(layer_data.dim - 1, 1);
-        return padding + nodeIdx * spacing;
+ 
+    const weightMatrices = nn.weights ? [
+        nn.weights.input_to_hidden1,
+        nn.weights.hidden1_to_hidden2,
+        nn.weights.hidden2_to_output,
+    ] : null;
+ 
+    const getY = (layerIndex, i) => {
+        const layer = layers[layerIndex];
+        const spacing = (h - 2 * padding) / Math.max(layer.values.length - 1, 1);
+        return padding + i * spacing;
     };
-
-    // Draw connections with weights as thickness
-    const drawConnections = (weights_matrix, from_layer, to_layer) => {
-        const from_dim = layers[from_layer].dim;
-        const to_dim = layers[to_layer].dim;
-
-        for (let to = 0; to < to_dim; to++) {
-            for (let from = 0; from < from_dim; from++) {
-                const weight = weights_matrix[to][from];
-                const normalized = Math.max(-1, Math.min(1, weight));
-                const red = Math.round(Math.max(0, -normalized) * 255);
-                const green = Math.round(Math.max(0, normalized) * 255);
-                const alpha = Math.abs(weight) > 0.01 ? Math.min(1, Math.abs(weight)) : 0; // hide very weak connections
-                const thickness = Math.abs(weight) * 6;
-                const color = `rgba(${red}, ${green}, 0, ${alpha})`;
-
-                const x1 = layers[from_layer].x;
-                const y1 = getNodeY(from_layer, from);
-                const x2 = layers[to_layer].x;
-                const y2 = getNodeY(to_layer, to);
-
-                networkCtx.strokeStyle = color;
-                networkCtx.lineWidth = thickness;
+ 
+    // --- Draw connections ---
+    for (let l = 0; l < layers.length - 1; l++) {
+        const from = layers[l];
+        const to   = layers[l + 1];
+ 
+        for (let i = 0; i < from.values.length; i++) {
+            for (let j = 0; j < to.values.length; j++) {
+ 
+                const x1 = from.x;
+                const y1 = getY(l, i);
+                const x2 = to.x;
+                const y2 = getY(l + 1, j);
+ 
+                let edgeColor = 'rgba(120,120,140,0.12)';
+                let edgeWidth = 0.5;
+                let signal    = 0;
+                let absSignal = 0;
+ 
+                if (weightMatrices && weightMatrices[l]) {
+                    const weight = weightMatrices[l][j]?.[i];
+                    if (weight !== undefined) {
+                        // signal = weight * activation of source node
+                        signal    = weight * from.values[i];
+                        absSignal = Math.abs(signal);
+ 
+                        // thickness 0.5..4 with signal strength
+                        edgeWidth = 0.5 + Math.min(absSignal, 1.0) * 3.5;
+ 
+                        // green positive, red negative, alpha fades weak connections
+                        const alpha = 0.08 + Math.min(absSignal, 1.0) * 0.75;
+                        edgeColor = signal > 0
+                            ? `rgba(40, 200, 80, ${alpha})`
+                            : signal < 0
+                                ? `rgba(220, 55, 55, ${alpha})`
+                                : `rgba(120, 120, 140, 0.08)`;
+                    }
+                }
+ 
+                // Static edge
                 networkCtx.beginPath();
                 networkCtx.moveTo(x1, y1);
                 networkCtx.lineTo(x2, y2);
+                networkCtx.strokeStyle = edgeColor;
+                networkCtx.lineWidth   = edgeWidth;
                 networkCtx.stroke();
+ 
+                // Travelling pulse (optional)
+                if (neuralNetPulsesEnabled && absSignal >= 0.05) {
+                    const speed       = 0.3 + Math.min(absSignal, 1.0) * 1.2;
+                    const phaseOffset = ((l * 97 + i * 31 + j * 13) % 100) / 100;
+                    const pulsePos    = (t * speed + phaseOffset) % 1.0;
+ 
+                    const px = x1 + (x2 - x1) * pulsePos;
+                    const py = y1 + (y2 - y1) * pulsePos;
+ 
+                    const pulseRadius = 1.5 + Math.min(absSignal, 1.0) * 2.5;
+                    const pulseAlpha  = 0.5 + Math.min(absSignal, 1.0) * 0.5;
+                    const pulseColor  = signal > 0
+                        ? `rgba(80, 240, 120,`
+                        : `rgba(255, 80, 80,`;
+ 
+                    // Soft glow
+                    const glow = networkCtx.createRadialGradient(px, py, 0, px, py, pulseRadius * 3);
+                    glow.addColorStop(0, `${pulseColor}${pulseAlpha})`);
+                    glow.addColorStop(1, `${pulseColor}0)`);
+                    networkCtx.beginPath();
+                    networkCtx.arc(px, py, pulseRadius * 3, 0, Math.PI * 2);
+                    networkCtx.fillStyle = glow;
+                    networkCtx.fill();
+ 
+                    // Hard core
+                    networkCtx.beginPath();
+                    networkCtx.arc(px, py, pulseRadius, 0, Math.PI * 2);
+                    networkCtx.fillStyle = `${pulseColor}${pulseAlpha})`;
+                    networkCtx.fill();
+                }
             }
         }
-    };
-
-    // Draw connections for each layer pair
-    drawConnections(weights.input_to_hidden1, 0, 1);
-    drawConnections(weights.hidden1_to_hidden2, 1, 2);
-    drawConnections(weights.hidden2_to_output, 2, 3);
-
-    // Draw nodes
-    for (let layer = 0; layer < 4; layer++) {
-        networkCtx.fillStyle = '#1f6ecb';
-        for (let node = 0; node < layers[layer].dim; node++) {
-            const x = layers[layer].x;
-            const y = getNodeY(layer, node);
+    }
+ 
+    // --- Draw nodes ---
+    for (let l = 0; l < layers.length; l++) {
+        const layer = layers[l];
+        for (let i = 0; i < layer.values.length; i++) {
+            const v     = layer.values[i];
+            const n     = Math.max(-1, Math.min(1, v));
+            const red   = Math.round(Math.max(0, -n) * 255);
+            const green = Math.round(Math.max(0, n) * 255);
+            const alpha = 0.3 + Math.abs(n) * 0.7;
+            const x     = layer.x;
+            const y     = getY(l, i);
+ 
+            // Glow
+            networkCtx.beginPath();
+            networkCtx.arc(x, y, nodeRadius + Math.abs(n) * 4, 0, Math.PI * 2);
+            networkCtx.fillStyle = `rgba(${red},${green},80,${alpha * 0.4})`;
+            networkCtx.fill();
+ 
+            // Core
             networkCtx.beginPath();
             networkCtx.arc(x, y, nodeRadius, 0, Math.PI * 2);
+            networkCtx.fillStyle = `rgba(${red},${green},80,${alpha})`;
             networkCtx.fill();
         }
     }
-
-    // Draw layer labels
+ 
+    // --- Labels ---
     networkCtx.fillStyle = '#111827';
     networkCtx.font = '12px Arial';
     networkCtx.textAlign = 'center';
-    const labels = ['Input', 'Hidden 1', 'Hidden 2', 'Output'];
-    for (let i = 0; i < 4; i++) {
-        networkCtx.fillText(labels[i], layers[i].x, h - 5);
-    }
+    ['Input', 'Hidden 1', 'Hidden 2', 'Output'].forEach((label, i) => {
+        networkCtx.fillText(label, layers[i].x, h - 5);
+    });
 }
 
-function drawLiveNeuralNetwork(nn) {
+function drawLiveNeuralNetwork_stable(nn) {
     if (!nn || !nn.hidden_dim_1 || !nn.output) {
         networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
         return;
@@ -604,7 +666,7 @@ canvas.addEventListener('click', async (event) => {
         // click empty space: deselect
         // selectedAnimal = null;
         sendSelection(null, null);
-        updateStatsPanel('Click a herbivore or predator to view stats.');
+
         //drawNeuralNetwork(null);
         drawState(lastState);
         return;
@@ -614,7 +676,6 @@ canvas.addEventListener('click', async (event) => {
     if (lastState.selected && lastState.selected.species === selection.species && lastState.selected.id === selection.id) {
         // selectedAnimal = null;
         sendSelection(null, null);
-        updateStatsPanel('Click a herbivore or predator to view stats.');
         //drawNeuralNetwork(null);
         drawState(lastState);
         return;
@@ -707,6 +768,14 @@ stepButton.addEventListener('click', async () => {
         statusEl.textContent = 'Error during step';
         console.error('Step error:', error);
     }
+});
+
+saveButton.addEventListener('click', async () => {
+    fetch('/save', { method: 'POST' })
+});
+
+loadButton.addEventListener('click', async () => {
+    fetch('/load', { method: 'POST' }).then(() => location.reload());
 });
 
 window.addEventListener('load', async () => {

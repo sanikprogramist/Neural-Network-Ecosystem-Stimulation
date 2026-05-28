@@ -1,3 +1,4 @@
+import pickle
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +17,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 def serve_index():
     return FileResponse(static_dir / "index.html")
 
+SAVE_PATH = Path(__file__).resolve().parent / "world_save.pkl"
 world = World()
 world.spawn_food(150)
 world.spawn_herbivore(50)
@@ -35,6 +37,26 @@ class SpawnRequest(BaseModel):
 class SpeedRequest(BaseModel):
     multiplier: float
 
+@app.post("/save")
+def save_world():
+    try:
+        with open(SAVE_PATH, "wb") as f:
+            pickle.dump(world, f)
+        return {"success": True, "path": str(SAVE_PATH)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Save failed: {e}")
+
+@app.post("/load")
+def load_world():
+    global world
+    if not SAVE_PATH.exists():
+        raise HTTPException(status_code=404, detail="No save file found")
+    try:
+        with open(SAVE_PATH, "rb") as f:
+            world = pickle.load(f)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Load failed: {e}")
 
 @app.get("/state")
 def get_state():
