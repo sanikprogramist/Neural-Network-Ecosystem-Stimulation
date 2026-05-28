@@ -52,7 +52,7 @@ let running = true;
 let lastState = null;
 let lastTickTime = performance.now();
 //const dt = 0.04;
-let selectedAnimal = null;
+//let selectedAnimal = null;
 
 async function fetchState() {
     const response = await fetch('/state');
@@ -111,17 +111,16 @@ function visionVecToCanvas(normDist, normAngle, heading, visionRange, halfFov, s
  */
 function drawVisionOverlay(animal, scaleX, scaleY) {
     const data = animal.nn_distances_angles;
-    if (!data || data.length < 6) return;
  
     const fov         = animal.fov;
     const visionRange = animal.vision_range;
-    const heading     = animal.angle;
+    const heading     = animal.face_direction;
     const halfFov     = fov / 2;
  
     const cx = animal.x * scaleX;
     const cy = animal.y * scaleY;
     const visionPx = visionRange * scaleX;
- 
+
     ctx.save();
  
     // ── 1. FOV cone ───────────────────────────────────────────────────────────
@@ -174,7 +173,7 @@ function drawVisionOverlay(animal, scaleX, scaleY) {
 
 
 function drawState(state) {
-    console.log('info about selected animal:', state.selected);
+    console.log('drawState called');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#eef3f7';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -208,17 +207,15 @@ function drawState(state) {
     }
 
     // --- Vision overlay (drawn before animals so animals appear on top) ---
-    if (selectedAnimal) {
-        const list = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
-        const current = (list || []).find((a) => a.id === selectedAnimal.id);
-        if (selectedAnimal.species === 'herbivore') {
-            if (current && current.nn_distances_angles) {
-                drawVisionOverlay(current, scaleX, scaleY);
+    if (state.selected) {
+        if (state.selected.species === 'herbivore') {
+            if (state.selected && state.selected.nn_distances_angles) {
+                drawVisionOverlay(state.selected, scaleX, scaleY);
             } // there are two selection logics going on and i need to fix it later
-            if (selectedNN) {
-                drawLiveNeuralNetwork(selectedNN);
-            }   
-        } else if (selectedAnimal.species === 'predator') {
+            //if (selectedNN) {
+            //    drawLiveNeuralNetwork(selectedNN);
+            //}   
+        } else if (state.selected.species === 'predator') {
             console.log('Vision overlay for predators not implemented yet');
         }
     }
@@ -278,28 +275,14 @@ function drawState(state) {
         });
     }
 
-    if (selectedAnimal) {
-        const currentList = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
-        const currentAnimal = (currentList || []).find((item) => item.id === selectedAnimal.id);
-
-        if (!currentAnimal) {
-            selectedAnimal = null;
-            sendSelection(null, null);
-            updateStatsPanel('Click a herbivore or predator to view stats.');
-            //drawNeuralNetwork(null);
-        } else if (selectedAnimal.generation !== undefined && currentAnimal.generation !== selectedAnimal.generation) {
-            selectedAnimal = null;
-            sendSelection(null, null);
-            updateStatsPanel('Click a herbivore or predator to view stats.');
-            //drawNeuralNetwork(null);
-        } else {
-            const pos = { x: currentAnimal.x, y: currentAnimal.y };
-            ctx.strokeStyle = '#000000';
+    if (state.selected) {
+         // draw a circle around the selected animal
+            const pos = { x: state.selected.x, y: state.selected.y };
+            ctx.strokeStyle = '#111111';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(screenX(pos.x), screenY(pos.y), selectedAnimal.species === 'predator' ? 12 : 10, 0, Math.PI * 2);
+            ctx.arc(screenX(pos.x), screenY(pos.y), state.selected.species === 'predator' ? 12 : 10, 0, Math.PI * 2);
             ctx.stroke();
-        }
     }
 
     if (typeof state.world?.time === 'number') {
@@ -308,12 +291,8 @@ function drawState(state) {
         statusEl.textContent = `Plants: ${state.plants?.length || 0} | Herbivores: ${state.herbivores?.length || 0} | Predators: ${state.predators?.length || 0}`;
     }
 
-    if (selectedAnimal) {
-        const list = selectedAnimal.species === 'predator' ? state.predators : state.herbivores;
-        const current = (list || []).find((a) => a.id === selectedAnimal.id);
-        if (current) {
-            updateStatsPanel(formatStats(current));
-        }
+    if (state.selected) {
+        updateStatsPanel(formatStats(state.selected)); 
     }
 }
 
@@ -373,7 +352,7 @@ function formatStats(stats) {
         Speed: ${stats.speed.toFixed(2)}<br>
         Satiety: ${stats.satiety.toFixed(2)}<br>
         Generation: ${stats.generation}<br>
-        Fitness: ${stats.fitness.toFixed(2)}<br>
+        Offspring: ${stats.offspring_count}<br>
         Reproduction: ${(stats.reproduction_progress * 100).toFixed(0)}%
     `;
 }
@@ -610,12 +589,12 @@ canvas.addEventListener('click', async (event) => {
     (lastState.herbivores || []).forEach((herbivore) => {
         const dx = herbivore.x - worldPos.x;
         const dy = herbivore.y - worldPos.y;
-        candidates.push({ species: 'herbivore', id: herbivore.id, distance: Math.hypot(dx, dy), x: herbivore.x, y: herbivore.y });
+        candidates.push({ species: 'herbivore', id: herbivore.id, generation: herbivore.generation, distance: Math.hypot(dx, dy), x: herbivore.x, y: herbivore.y });
     });
     (lastState.predators || []).forEach((predator) => {
         const dx = predator.x - worldPos.x;
         const dy = predator.y - worldPos.y;
-        candidates.push({ species: 'predator', id: predator.id, distance: Math.hypot(dx, dy), x: predator.x, y: predator.y });
+        candidates.push({ species: 'predator', id: predator.id, generation: predator.generation, distance: Math.hypot(dx, dy), x: predator.x, y: predator.y });
     });
 
     candidates.sort((a, b) => a.distance - b.distance);
@@ -623,7 +602,7 @@ canvas.addEventListener('click', async (event) => {
 
     if (!selection) {
         // click empty space: deselect
-        selectedAnimal = null;
+        // selectedAnimal = null;
         sendSelection(null, null);
         updateStatsPanel('Click a herbivore or predator to view stats.');
         //drawNeuralNetwork(null);
@@ -632,35 +611,28 @@ canvas.addEventListener('click', async (event) => {
     }
 
     // Toggle deselect when clicking the already selected animal
-    if (selectedAnimal && selectedAnimal.species === selection.species && selectedAnimal.id === selection.id) {
-        selectedAnimal = null;
+    if (lastState.selected && lastState.selected.species === selection.species && lastState.selected.id === selection.id) {
+        // selectedAnimal = null;
         sendSelection(null, null);
         updateStatsPanel('Click a herbivore or predator to view stats.');
         //drawNeuralNetwork(null);
         drawState(lastState);
         return;
     }
-
     // Select new animal and initialize panel from current state; fetch detailed stats in background
-    const instant = (selection.species === 'predator' ? (lastState.predators || []) : (lastState.herbivores || [])).find((a) => a.id === selection.id);
-    selectedAnimal = {
-        species: selection.species,
-        id: selection.id,
-        generation: instant?.generation,
-    };
+    //const instant = (selection.species === 'predator' ? (lastState.predators || []) : (lastState.herbivores || [])).find((a) => a.id === selection.id);
+    //selectedAnimal = {
+    //    species: selection.species,
+    //    id: selection.id,
+    //    generation: instant?.generation,
+    //};
+
     sendSelection(selection.species, selection.id); // inform backend about selection so it can prepare detailed stats (like NN activations) for this animal
-    // Fetch full stats (may include extra fields) and update panel when ready
-    fetchAnimalStats(selection.species, selection.id)
-        .then((stats) => {
-            console.log('Received full stats:', stats);
-            selectedAnimal.generation = stats.generation;
-            updateStatsPanel(formatStats(stats));
-            //drawNeuralNetwork(stats.network_weights);
-        })
-        .catch((err) => {
-            console.warn('Could not fetch full stats:', err);
-        });
-    drawState(lastState);
+    // Fetch full stats and update panel when ready 
+    const temp_state = await fetchState();
+    //selectedAnimal.generation = temp_state.selected.generation;
+    updateStatsPanel(formatStats(temp_state.selected));
+    drawState(temp_state);
 });
 
 async function sendSelection(species, id) {
@@ -744,7 +716,7 @@ window.addEventListener('load', async () => {
         drawState(state);
         updateStatsPanel('Click a herbivore or predator to view stats.');
         startLoop();
-        setInterval(updateChart, 2000);
+        setInterval(updateChart, 3000);
     } catch (error) {
         statusEl.textContent = 'Unable to load simulation state.';
         console.error(error);

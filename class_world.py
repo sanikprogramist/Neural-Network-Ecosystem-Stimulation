@@ -16,9 +16,9 @@ from class_animal_brain_nn import *
 # 4. predator preception vision is still old version
 # 7. graph continues to accumulate points even when game is paused. add if check - if world time same as previous
 # 8. maybe animated neural network? that would be awesome but idk if its possible
-# 9. animals stats returning reproduction based on old invariable percentage
-# 10. predators still use invariable gestation time and old colour change and static life expectancy
-# 11. save load
+# 9. predator stats returning reproduction based on old invariable percentage
+# 10. predators still use invariable gestation time and old colour change and static life expectancy and selected predator api endpoint
+# 11. save load - just save the world object?
 
 class World:
 
@@ -211,6 +211,7 @@ class World:
             {
                 "id": int(i),
                 "species": "herbivore",
+                "generation": int(self.herbivore_generations[i]),
                 "x": float(self.herbivore_positions[i, 0]),
                 "y": float(self.herbivore_positions[i, 1]),
                 "angle": float(self.herbivore_angles[i]),
@@ -218,15 +219,6 @@ class World:
                 "red": int(self.herbivore_colours[i,0]),
                 "green": int(self.herbivore_colours[i,1]),
                 "blue": int(self.herbivore_colours[i,2]),
-                "satiety": float(self.herbivore_satiety[i]),
-                "age": float(self.herbivore_ages[i]),
-                "generation": int(self.herbivore_generations[i]),
-                "fitness": float(self.herbivore_fitnesses[i]),
-                "reproduction_progress": float(self.herbivore_reproduction_timers[i] / max(self.herbivore_gestation_time, 1)),
-                #this also should be moved to the selected herbivroe only:
-                "nn_distances_angles" : self.herbivore_nn_inputs[i,0:self.herbivore_num_external_infos].tolist(),
-                "fov": float(self.herbivore_FOV),
-                "vision_range": float(self.herbivore_vision_range),
             }
             for i in herbivore_indices
         ]
@@ -256,12 +248,26 @@ class World:
             for i in predator_indices
             ]
         selected = None
-        if self.selected_herbivore_index is not None:# and self.alive_herbivore_array[self.selected_herbivore_index]:
+        if self.selected_herbivore_index is not None and self.alive_herbivore_array[self.selected_herbivore_index]:
             brain = self.herbivore_brains[self.selected_herbivore_index]
             weights = self._to_json_compatible(brain.get_network_weights())
             selected = {
                 "species": "herbivore",
                 "id": int(self.selected_herbivore_index),
+                "x": float(self.herbivore_positions[self.selected_herbivore_index, 0]),
+                "y": float(self.herbivore_positions[self.selected_herbivore_index, 1]),
+                "speed": float(self.herbivore_speeds[self.selected_herbivore_index]),
+                "face_direction": float(self.herbivore_angles[self.selected_herbivore_index]),
+                "satiety": float(self.herbivore_satiety[self.selected_herbivore_index]),
+                "age": float(self.herbivore_ages[self.selected_herbivore_index]),
+                "generation": int(self.herbivore_generations[self.selected_herbivore_index]),
+                "fitness": float(self.herbivore_fitnesses[self.selected_herbivore_index]),
+                "reproduction_progress": float(self.herbivore_reproduction_timers[self.selected_herbivore_index] / self.herbivore_gestation_time_reqs[self.selected_herbivore_index]),
+                "fov": float(self.herbivore_FOV),
+                "vision_range": float(self.herbivore_vision_range),
+                "offspring_count": int(self.herbivore_offsping_count[self.selected_herbivore_index]),
+
+                "nn_distances_angles" : self.herbivore_nn_inputs[self.selected_herbivore_index,0:self.herbivore_num_external_infos].tolist(), #this is basically the inputs again
                 "inputs": self.herbivore_nn_inputs[self.selected_herbivore_index].tolist(),
                 "hidden_dim_1": self.selected_herbivore_nn_hdim1.tolist() if self.selected_herbivore_nn_hdim1 is not None else None,
                 "hidden_dim_2": self.selected_herbivore_nn_hdim2.tolist() if self.selected_herbivore_nn_hdim2 is not None else None,
