@@ -16,40 +16,41 @@ from class_animal_brain_nn import *
 # 4. predator preception vision is still old version
 # 9. predator stats returning reproduction based on old invariable percentage
 # 10. predators still use invariable gestation time and old colour change and static life expectancy and selected predator api endpoint
-# 11. save load - just save the world object?
+# 11. settings page!!
+# 12. im not sure if spawn things work properly
+# 13. settings sliders in settings page currently dont read default values from world itself
 
 class World:
 
     def __init__(self):
+        # I will mark editable settings with #M
         #globals
-        self.world_speed_multiplier = 1
+        self.world_speed_multiplier = 1 #M
         self.world_width = 800
         self.world_height = 600
 
-        self.speed_friction_coefficient = 0.15
-        self.max_speed = 25
+        self.max_speed = 20 
         self.max_angular_velocity = 0.8
 
-        self.global_mutation_rate = 0.025 # stable value was 0.1
-        self.global_mutation_strength = 0.03 # stable value was 0.2
+        self.global_mutation_rate = 0.025 # stable value was 0.1 #M
+        self.global_mutation_strength = 0.03 # stable value was 0.2 #M
         self.colour_change_strength = 15
         self.min_hidden_dim_size = 4 # starting bound - they might evolve smaller or larger
         self.max_hidden_dim_size = 10 # starting bound
 
-        self.show_raycast = False
-
         #plants
-        self.max_plant = 300
-        self.plant_size = 5
-        self.plant_nutrition_value = 0.9
-        self.plant_random_spawn_interval = 2.9 #2.2
-        self.plant_reproduction_interval = 6.5 #5.5
+        self.max_plant = 300 #M
+        self.plant_size = 5 #M
+        self.plant_nutrition_value = 0.75 #M
+        self.plant_regrowth_power = 1.0 #M already added
+        self.plant_random_spawn_interval = 4 / self.plant_regrowth_power #2.2 originally
+        self.plant_reproduction_interval = 10 / self.plant_regrowth_power #5.5 originally
 
-        #predators
-        self.max_predator = 70
-        self.predator_size = 5
+        #predators # we dont add predator settings rn because their mechanics are very outdated
+        self.max_predator = 70 
+        self.predator_size = 5 
         self.predator_satiety_loss_factor = 0.006
-        self.predator_max_satiety = 2
+        self.predator_max_satiety = 2 
         self.predator_gestation_time = 30
         self.predator_reproduction_minimum_satiety = 1.0
         self.predator_reproduction_satiety_loss = 0.5
@@ -61,23 +62,21 @@ class World:
         self.predator_min_age_to_reproduce = 20
 
         #herbivores
-        self.max_herbivore = 2000
+        self.max_herbivore = 2000 #M
         self.herbivore_size = 4
-        self.herbivore_satiety_loss_factor = 0.006
-        self.herbivore_max_satiety = 2
-        self.herbivore_gestation_time = 20
-        self.herbivore_avg_gestation_time = 25
-        self.herbivore_gestation_time_std_dev = 5
-        self.herbivore_reproduction_minimum_satiety = 1.0
-        self.herbivore_reproduction_satiety_loss = 0.5
-        self.herbivore_max_percent_satiety_to_eat = 0.75
-        self.herbivore_FOV = np.pi*1.2
-        self.herbivore_num_of_raysections = 10
-        self.herbivore_vision_range = 170
-        self.herbivore_avg_age = 100 # in seconds
-        self.herbivore_age_std_dev = 7
-        self.herbivore_min_age_to_reproduce = 20
-        self.herbivore_nutrition_value = 1.0
+        self.herbivore_satiety_loss_factor = 0.006 #M how fast they go hungry, this is multiplied with speed
+        self.herbivore_max_satiety = 2 #M
+        self.herbivore_avg_gestation_time = 25 #M
+        self.herbivore_gestation_time_std_dev = 5 #M
+        self.herbivore_reproduction_minimum_satiety = 1.0 #M # minimum satiety required to start gestation
+        self.herbivore_reproduction_satiety_loss = 0.5 #M # how much satiety they lose when they reproduce
+        self.herbivore_max_percent_satiety_to_eat = 0.75 #M # they wont eat if their satiety is above this percentage
+        self.herbivore_FOV = np.pi*1.2 #M
+        self.herbivore_vision_range = 170 #M
+        self.herbivore_avg_age = 100 # in seconds #M
+        self.herbivore_age_std_dev = 7 #M
+        self.herbivore_min_age_to_reproduce = 20 #M # they wont reproduce if they are younger than this
+        self.herbivore_nutrition_value = 1.0 #how much satiety predators get from eating a herbivore.
 
         #DO NOT EDIT
         self.plant_positions = np.zeros((self.max_plant,2))
@@ -99,9 +98,10 @@ class World:
         self.herbivore_num_external_infos = self.herbivore_detectable_object_types * self.herbivore_types_of_info_about_each_object
         self.herbivore_self_infos = 2 # speed and satiety
         self.herbivore_nn_inputs = np.zeros((self.max_herbivore, (self.herbivore_num_external_infos + self.herbivore_self_infos)),dtype=np.float32)
+        #i dont know why but this is required still by app.js
         self.selected_herbivore_nn_hdim1 = None
         self.selected_herbivore_nn_hdim2 = None
-        self.selected_herbivore_nn_output = None #obama
+        self.selected_herbivore_nn_output = None 
 
         self.herbivore_reproduction_timers = np.zeros((self.max_herbivore,))
         self.herbivore_gestation_time_reqs = np.zeros((self.max_herbivore,))
@@ -145,6 +145,11 @@ class World:
         self.selected_predator_index = None
         self.world_time = 0
         self.predator_death_log = pd.DataFrame(columns=["fitness", "generation"])
+    
+    def recalculate_dependent_attributes(self):
+        #this is called when the world is restarted after new settings are applied
+        self.plant_random_spawn_interval = 4 / self.plant_regrowth_power 
+        self.plant_reproduction_interval = 10 / self.plant_regrowth_power 
 
     def update(self,dt): # super master function which updates the state of the world
         self.update_plants(dt)
@@ -157,18 +162,8 @@ class World:
         return free_indices
     
     def get_best_brain(self):
-        if np.max(self.predator_fitnesses) >= self.predator_current_best_fitness:
-            self.predator_best_brain = self.predator_brains[np.argmax(self.predator_fitnesses)]
-            self.predator_current_best_fitness = np.max(self.predator_fitnesses)
-            self.predator_best_bias = self.predator_nn_inputs[np.argmax(self.predator_fitnesses),self.predator_num_of_raysections*2+1]
-            self.perdator_best_generation = self.predator_generations[np.argmax(self.predator_fitnesses)]
-    
-        if np.max(self.herbivore_fitnesses) >= self.herbivore_current_best_fitness:
-            self.herbivore_best_brain = self.herbivore_brains[np.argmax(self.herbivore_fitnesses)]
-            self.herbivore_current_best_fitness = np.max(self.herbivore_fitnesses)
-            self.herbivore_best_bias = self.herbivore_nn_inputs[np.argmax(self.herbivore_fitnesses),self.herbivore_num_of_raysections*2+1]
-            self.herbivore_best_generation = self.herbivore_generations[np.argmax(self.herbivore_fitnesses)]
-            
+        return
+        
     def _serialize_position(self, position):
         return [float(position[0]), float(position[1])]
 
@@ -267,6 +262,7 @@ class World:
 
                 "nn_distances_angles" : self.herbivore_nn_inputs[self.selected_herbivore_index,0:self.herbivore_num_external_infos].tolist(), #this is basically the inputs again
                 "inputs": self.herbivore_nn_inputs[self.selected_herbivore_index].tolist(),
+                #clean this up later: input, hidden_dim1, hidden_dim2, output already contained in weights
                 "hidden_dim_1": self.selected_herbivore_nn_hdim1.tolist() if self.selected_herbivore_nn_hdim1 is not None else None,
                 "hidden_dim_2": self.selected_herbivore_nn_hdim2.tolist() if self.selected_herbivore_nn_hdim2 is not None else None,
                 "output": self.selected_herbivore_nn_output.tolist() if self.selected_herbivore_nn_output is not None else None,
@@ -286,7 +282,6 @@ class World:
                 "current_plant": int(np.sum(self.alive_plant_array)),
                 "current_herbivore": int(np.sum(self.alive_herbivore_array)),
                 "current_predator": int(np.sum(self.alive_predator_array)),
-                "show_raycast": bool(self.show_raycast),
             },
             "plants": plants,
             "herbivores": herbivores,
@@ -319,7 +314,7 @@ class World:
                         "age": float(self.herbivore_ages[index]),
                         "generation": int(self.herbivore_generations[index]),
                         "fitness": float(self.herbivore_fitnesses[index]),
-                        "reproduction_progress": float(self.herbivore_reproduction_timers[index] / max(self.herbivore_gestation_time, 1)),
+                        "reproduction_progress": float(self.herbivore_reproduction_timers[index] / max(self.herbivore_gestation_time_reqs[index], 1)),
                         "children": int(self.herbivore_offsping_count[index]),
                         "hidden_dim_1": None,
                         "hidden_dim_2": None,
@@ -727,7 +722,8 @@ class World:
                     self.herbivore_fitnesses[parent_index] += 2 * (1/max(self.current_plant, 0.01)) * (1+0.5*self.current_predator/self.max_predator)
 
     def resurrect_herbivores(self, spawn_count):
-        # this doesnt have colours yet
+            return
+            # outdated
 
             free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
 
@@ -747,7 +743,7 @@ class World:
             self.herbivore_satiety[free_indeces] = 1                
             self.herbivore_fitnesses[free_indeces] = 0
             self.alive_herbivore_array[free_indeces] = True
-            self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = np.clip(self.herbivore_best_bias + np.random.uniform(low=-self.global_mutation_strength,high=self.global_mutation_strength,size=1),-1,1)
+            #self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = np.clip(self.herbivore_best_bias + np.random.uniform(low=-self.global_mutation_strength,high=self.global_mutation_strength,size=1),-1,1)
             self.herbivore_generations[free_indeces] = self.herbivore_best_generation+1
             for idx in free_indeces:
                 new_brain = copy.deepcopy(self.herbivore_best_brain)
@@ -1022,46 +1018,3 @@ class World:
                 new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
                 self.predator_brains[idx] = new_brain
             self.current_predator = spawn_count
-
-
-    def show_herbivore_stats(self, herb_idx, root):
-        brain = self.herbivore_brains[herb_idx]
-        sizes = brain.get_dim_sizes()
-        stats = f"""
-        Herbivore {herb_idx}
-        ---------------------------
-        Age: {round(self.herbivore_ages[herb_idx],2)}
-        Generation: {round(self.herbivore_generations[herb_idx])}
-        Children: {round(self.herbivore_offsping_count[herb_idx])}
-        Angle: {round(self.herbivore_angles[herb_idx],2)}
-        Satiety: {round(self.herbivore_satiety[herb_idx],2)}
-        Gestation: {round(100*self.herbivore_reproduction_timers[herb_idx]/self.herbivore_gestation_time,2)} %
-
-        Speed: {round(self.herbivore_speeds[herb_idx],2)}
-        Angle: {round(self.herbivore_angles[herb_idx],2)}
-        
-        Hidden dimension 1 size: {round(sizes[0])}
-        Hidden dimension 2 size: {round(sizes[1])}
-        """
-        print(stats)
-    
-    def show_predator_stats(self, herb_idx, root): #too laze to rename herb_idx here sorry
-        brain = self.predator_brains[herb_idx]
-        sizes = brain.get_dim_sizes()
-        stats = f"""
-        Predator {herb_idx}
-        ---------------------------
-        Age: {round(self.predator_ages[herb_idx],2)}
-        Generation: {round(self.predator_generations[herb_idx])}
-        Children: {round(self.predator_offsping_count[herb_idx])}
-        Angle: {round(self.predator_angles[herb_idx],2)}
-        Satiety: {round(self.predator_satiety[herb_idx],2)}
-        Gestation: {round(100*self.predator_reproduction_timers[herb_idx]/self.predator_gestation_time,2)} %
-
-        Speed: {round(self.predator_speeds[herb_idx],2)}
-        Angle: {round(self.predator_angles[herb_idx],2)}
-
-        Hidden dimension 1 size: {round(sizes[0])}
-        Hidden dimension 2 size: {round(sizes[1])}
-        """
-        print(stats)

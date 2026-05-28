@@ -71,30 +71,196 @@
         #populationChart {
             width: 100%;
         }
+
+        /* Settings View Styles */
+        .setting-group {
+            margin-bottom: 16px;
+            max-width: 400px;
+        }
+
+        .setting-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .setting-group input[type="range"] {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
     <h1>Neural Network Ecosystem</h1>
 
-    <div id="controls">
-        <button id="toggleButton">Pause</button>
-        <button id="stepButton">Step</button>
-        <button id="saveButton">Save</button>
-        <button id="loadButton">Load</button>
-
-    </div>
-
-    <div id="mainLayout">
-        <canvas id="simCanvas" width="800" height="600"></canvas>
-
-        <div id="chartPanel">
-            <canvas id="populationChart"></canvas>
+    <div id="simView">
+        <div id="controls">
+            <button id="toggleButton">Pause</button>
+            <button id="stepButton">Step</button>
+            <button id="saveButton">Save</button>
+            <button id="loadButton">Load</button>
+            <button id="settingsButton">Simulation Settings</button> <input type="file" id="loadInput" accept=".pkl" style="display:none">
         </div>
+
+        <div id="mainLayout">
+            <canvas id="simCanvas" width="800" height="600"></canvas>
+
+            <div id="chartPanel">
+                <canvas id="populationChart"></canvas>
+            </div>
+        </div>
+
+        <div id="status">Loading...</div>
+        <div id="stats" style="margin-top:12px; padding:10px; border:1px solid #d0d7de; border-radius:6px; background:#ffffff; max-width:820px; font-size:13px; line-height:1.5; color:#111827;">Click a herbivore or predator to view stats.</div>
+        <canvas id="networkCanvas" width="820" height="300"></canvas>
     </div>
 
-    <div id="status">Loading...</div>
-    <div id="stats" style="margin-top:12px; padding:10px; border:1px solid #d0d7de; border-radius:6px; background:#ffffff; max-width:820px; font-size:13px; line-height:1.5; color:#111827;">Click a herbivore or predator to view stats.</div>
-    <canvas id="networkCanvas" width="820" height="300"></canvas>
+    <div id="settingsView" style="display: none; background: white; padding: 25px; border: 1px solid #d0d7de; border-radius: 8px; max-width: 850px; max-height: 85vh; overflow-y: auto;">
+        <h2>Simulation Settings</h2>
+        <p style="color: #666; margin-bottom: 20px;">Adjust the parameters of your evolutionary ecosystem environment.</p>
+
+        <style>
+            .settings-section { margin-bottom: 24px; border-bottom: 1px solid #e1e4e8; padding-bottom: 16px; }
+            .settings-section h3 { margin-bottom: 12px; color: #0366d6; font-size: 16px; }
+            .setting-desc { font-size: 12px; color: #586069; margin: 2px 0 8px 0; font-style: italic; }
+        </style>
+
+        <div class="settings-section">
+            <h3>Global Environment Parameters</h3>
+            
+            <div class="setting-group">
+                <label for="worldSpeedInput">World Speed Multiplier: <span id="worldSpeedValue">1.0</span>x</label>
+                <p class="setting-desc">Speeds up or slows down time processing steps across the ecosystem.</p>
+                <input type="range" id="worldSpeedInput" min="0.1" max="5.0" step="0.1" value="1.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="globalMutationRateInput">Global Mutation Rate: <span id="globalMutationRateValue">0.025</span></label>
+                <p class="setting-desc">Probability that an individual gene/weight mutates during reproduction cycles.</p>
+                <input type="range" id="globalMutationRateInput" min="0.0" max="1.0" step="0.005" value="0.025">
+            </div>
+
+            <div class="setting-group">
+                <label for="globalMutationStrengthInput">Global Mutation Strength: <span id="globalMutationStrengthValue">0.03</span></label>
+                <p class="setting-desc">The maximum magnitude variance applied to a mutating weight node value.</p>
+                <input type="range" id="globalMutationStrengthInput" min="0.0" max="1.0" step="0.01" value="0.03">
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Plant & Resource Configuration</h3>
+
+            <div class="setting-group">
+                <label for="maxPlantInput">Max Plant Capacity: <span id="maxPlantValue">300</span></label>
+                <p class="setting-desc">The absolute limit of plant entities allowed to exist simultaneously.</p>
+                <input type="range" id="maxPlantInput" min="10" max="1000" step="10" value="300">
+            </div>
+
+            <div class="setting-group">
+                <label for="plantSizeInput">Plant Collision Size: <span id="plantSizeValue">5.0</span></label>
+                <p class="setting-desc">The physics radius thickness of each individual plant element.</p>
+                <input type="range" id="plantSizeInput" min="1.0" max="20.0" step="0.5" value="5.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="plantNutritionValueInput">Plant Nutrition Value: <span id="plantNutritionValueValue">0.75</span></label>
+                <p class="setting-desc">How much individual satiety points a herbivore gains upon chewing a plant unit.</p>
+                <input type="range" id="plantNutritionValueInput" min="0.1" max="3.0" step="0.05" value="0.75">
+            </div>
+
+            <div class="setting-group">
+                <label for="plantRegrowthPowerInput">Plant Regrowth Power: <span id="plantRegrowthPowerValue">1.0</span></label>
+                <p class="setting-desc">Dictates plant creation velocity intervals across random patches.</p>
+                <input type="range" id="plantRegrowthPowerInput" min="0.1" max="5.0" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Herbivore Agent Configuration</h3>
+
+            <div class="setting-group">
+                <label for="maxHerbivoreInput">Max Herbivore Capacity: <span id="maxHerbivoreValue">2000</span></label>
+                <p class="setting-desc">Hard ceiling capping maximum active live herbivore organism agents.</p>
+                <input type="range" id="maxHerbivoreInput" min="50" max="3000" step="50" value="2000">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreSatietyLossInput">Satiety Loss Factor: <span id="herbivoreSatietyLossValue">0.006</span></label>
+                <p class="setting-desc">Base metabolic starvation rate (multiplied against current animal speed velocity).</p>
+                <input type="range" id="herbivoreSatietyLossInput" min="0.001" max="0.05" step="0.001" value="0.006">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreMaxSatietyInput">Max Satiety Storage: <span id="herbivoreMaxSatietyValue">2.0</span></label>
+                <p class="setting-desc">Maximum internal stomach volume storage ceiling for herbivore agents.</p>
+                <input type="range" id="herbivoreMaxSatietyInput" min="0.5" max="5.0" step="0.1" value="2.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreAvgGestationInput">Avg Gestation Time: <span id="herbivoreAvgGestationValue">25.0</span>s</label>
+                <p class="setting-desc">Average expected length of pregnancy development before giving birth.</p>
+                <input type="range" id="herbivoreAvgGestationInput" min="5.0" max="100.0" step="1.0" value="25.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreGestationStdInput">Gestation Time Std Dev: <span id="herbivoreGestationStdValue">5.0</span>s</label>
+                <p class="setting-desc">Variance distribution spread applied over pregnancy duration timers.</p>
+                <input type="range" id="herbivoreGestationStdInput" min="0.0" max="20.0" step="0.5" value="5.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreMinReproductionSatietyInput">Min Reproduction Satiety: <span id="herbivoreMinReproductionSatietyValue">1.0</span></label>
+                <p class="setting-desc">Minimum required stomach nutrition depth to trigger gestation cycles.</p>
+                <input type="range" id="herbivoreMinReproductionSatietyInput" min="0.1" max="3.0" step="0.1" value="1.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreReproductionLossInput">Reproduction Satiety Cost: <span id="herbivoreReproductionLossValue">0.5</span></label>
+                <p class="setting-desc">Stomach satiety energy instantly deducted and passed into offspring at birth.</p>
+                <input type="range" id="herbivoreReproductionLossInput" min="0.1" max="2.0" step="0.1" value="0.5">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreEatPercentThresholdInput">Eating Inhibition Threshold: <span id="herbivoreEatPercentThresholdValue">75</span>%</label>
+                <p class="setting-desc">Agents refuse to eat plants if their current full meter percentage is above this point.</p>
+                <input type="range" id="herbivoreEatPercentThresholdInput" min="10" max="100" step="5" value="75">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreFOVInput">Field of Vision (FOV): <span id="herbivoreFOVValue">3.77</span> rad</label>
+                <p class="setting-desc">The viewing angle wrap arc for sensory vision ray casting (1.2 * PI ≈ 3.77).</p>
+                <input type="range" id="herbivoreFOVInput" min="0.5" max="6.28" step="0.05" value="3.77">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreVisionRangeInput">Vision Sensory Range: <span id="herbivoreVisionRangeValue">170</span>px</label>
+                <p class="setting-desc">The maximum absolute distance an agent's raycast vision can detect targets.</p>
+                <input type="range" id="herbivoreVisionRangeInput" min="50" max="500" step="10" value="170">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreAvgAgeInput">Average Life Span: <span id="herbivoreAvgAgeValue">100.0</span>s</label>
+                <p class="setting-desc">Average absolute expected life expectancy baseline before natural death.</p>
+                <input type="range" id="herbivoreAvgAgeInput" min="10.0" max="300.0" step="5.0" value="100.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreAgeStdInput">Life Span Std Dev: <span id="herbivoreAgeStdValue">7.0</span>s</label>
+                <p class="setting-desc">The randomized normal deviation curve width calculated on a per-agent lifespan.</p>
+                <input type="range" id="herbivoreAgeStdInput" min="0.0" max="30.0" step="0.5" value="7.0">
+            </div>
+
+            <div class="setting-group">
+                <label for="herbivoreMinAgeReproductionInput">Maturity Age for Breeding: <span id="herbivoreMinAgeReproductionValue">20.0</span>s</label>
+                <p class="setting-desc">An agent must survive to at least this age before its reproduction systems trigger.</p>
+                <input type="range" id="herbivoreMinAgeReproductionInput" min="0.0" max="100.0" step="1.0" value="20.0">
+            </div>
+        </div>
+
+        <br>
+        <button id="backButton" style="background-color: #f0f0f0;">Go Back</button>
+        <button id="restartSettingsButton" style="background-color: #2f8f3a; color: white; border-color: #25722e;">Restart with new settings</button>
+    </div>
 
     <script src="/static/app.js"></script>
 </body>

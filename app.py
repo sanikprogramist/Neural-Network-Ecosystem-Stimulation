@@ -1,9 +1,10 @@
 import pickle
+import io
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -17,7 +18,6 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 def serve_index():
     return FileResponse(static_dir / "index.html")
 
-SAVE_PATH = Path(__file__).resolve().parent / "world_save.pkl"
 world = World()
 world.spawn_food(150)
 world.spawn_herbivore(50)
@@ -33,30 +33,52 @@ class SpawnRequest(BaseModel):
     herbivores: Optional[int] = 0
     predators: Optional[int] = 0
 
-
 class SpeedRequest(BaseModel):
     multiplier: float
+class RestartSettingsRequest(BaseModel):
+    # Global Settings
+    world_speed_multiplier: float
+    global_mutation_rate: float
+    global_mutation_strength: float
+    
+    # Plant Settings
+    max_plant: int
+    plant_size: float
+    plant_nutrition_value: float
+    plant_regrowth_power: float
+    
+    # Herbivore Settings
+    max_herbivore: int
+    herbivore_satiety_loss_factor: float
+    herbivore_max_satiety: float
+    herbivore_avg_gestation_time: float
+    herbivore_gestation_time_std_dev: float
+    herbivore_reproduction_minimum_satiety: float
+    herbivore_reproduction_satiety_loss: float
+    herbivore_max_percent_satiety_to_eat: float
+    herbivore_FOV: float
+    herbivore_vision_range: float
+    herbivore_avg_age: float
+    herbivore_age_std_dev: float
+    herbivore_min_age_to_reproduce: float
 
-@app.post("/save")
+@app.get("/save")
 def save_world():
-    try:
-        with open(SAVE_PATH, "wb") as f:
-            pickle.dump(world, f)
-        return {"success": True, "path": str(SAVE_PATH)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Save failed: {e}")
+    buf = io.BytesIO()
+    pickle.dump(world, buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": "attachment; filename=world_save.pkl"}
+    )
 
 @app.post("/load")
-def load_world():
+async def load_world(file: UploadFile = File(...)):
     global world
-    if not SAVE_PATH.exists():
-        raise HTTPException(status_code=404, detail="No save file found")
-    try:
-        with open(SAVE_PATH, "rb") as f:
-            world = pickle.load(f)
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Load failed: {e}")
+    data = await file.read()
+    world = pickle.load(io.BytesIO(data))
+    return {"success": True}
 
 @app.get("/state")
 def get_state():
@@ -93,6 +115,51 @@ def set_speed(req: SpeedRequest):
     return {"world_speed_multiplier": world.world_speed_multiplier}
 
 
+@app.post("/restart_simulation")
+def restart_simulation(req: RestartSettingsRequest):
+    global world
+    
+    # 1. Create a fresh world object to clear old entities
+    world = World()
+    
+    # 2. Apply all editable settings received from the frontend configuration
+    # Globals
+    world.world_speed_multiplier = req.world_speed_multiplier
+    world.global_mutation_rate = req.global_mutation_rate
+    world.global_mutation_strength = req.global_mutation_strength
+    
+    # Plants
+    world.max_plant = req.max_plant
+    world.plant_size = req.plant_size
+    world.plant_nutrition_value = req.plant_nutrition_value
+    world.plant_regrowth_power = req.plant_regrowth_power
+    
+    # Herbivores
+    world.max_herbivore = req.max_herbivore
+    world.herbivore_satiety_loss_factor = req.herbivore_satiety_loss_factor
+    world.herbivore_max_satiety = req.herbivore_max_satiety
+    world.herbivore_avg_gestation_time = req.herbivore_avg_gestation_time
+    world.herbivore_gestation_time_std_dev = req.herbivore_gestation_time_std_dev
+    world.herbivore_reproduction_minimum_satiety = req.herbivore_reproduction_minimum_satiety
+    world.herbivore_reproduction_satiety_loss = req.herbivore_reproduction_satiety_loss
+    world.herbivore_max_percent_satiety_to_eat = req.herbivore_max_percent_satiety_to_eat
+    world.herbivore_FOV = req.herbivore_FOV
+    world.herbivore_vision_range = req.herbivore_vision_range
+    world.herbivore_avg_age = req.herbivore_avg_age
+    world.herbivore_age_std_dev = req.herbivore_age_std_dev
+    world.herbivore_min_age_to_reproduce = req.herbivore_min_age_to_reproduce
+    
+    # 3. recaulculate variables that depend on the above variables
+    world.recalculate_dependent_attributes()
+    
+    # 4. Spawn initial entities into your freshly updated ecosystem
+    world.spawn_food(150)
+    world.spawn_herbivore(50)
+    world.spawn_predator(0)
+    
+    return {"success": True, "message": "Simulation restarted with new settings"}
+
+
 @app.get("/animal/{species}/{index}")
 def animal_stats(species: str, index: int):
     try:
@@ -104,6 +171,7 @@ def animal_stats(species: str, index: int):
         raise HTTPException(status_code=500, detail=f"Internal error fetching animal stats: {exc}")
 
 @app.post("/select_animal")
+#this is the frontend click selection sending a message to the backend to set the selected animal index
 def select_animal(data: dict):
 
     species = data.get("species")

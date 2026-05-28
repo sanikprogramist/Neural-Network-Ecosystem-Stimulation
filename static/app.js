@@ -53,8 +53,47 @@ const populationChart = new Chart(chartCtx, {
 let running = true;
 let lastState = null;
 let lastTickTime = performance.now();
-//const dt = 0.04;
-//let selectedAnimal = null;
+
+// --- DOM ELEMENTS FOR SETTINGS ---
+const simView = document.getElementById('simView');
+const settingsView = document.getElementById('settingsView');
+const settingsButton = document.getElementById('settingsButton');
+const backButton = document.getElementById('backButton');
+const restartSettingsButton = document.getElementById('restartSettingsButton');
+
+
+const inputsConfig = [
+    { input: 'worldSpeedInput', val: 'worldSpeedValue', isFloat: true, fixed: 1 },
+    { input: 'globalMutationRateInput', val: 'globalMutationRateValue', isFloat: true, fixed: 3 },
+    { input: 'globalMutationStrengthInput', val: 'globalMutationStrengthValue', isFloat: true, fixed: 2 },
+    { input: 'maxPlantInput', val: 'maxPlantValue', isFloat: false },
+    { input: 'plantSizeInput', val: 'plantSizeValue', isFloat: true, fixed: 1 },
+    { input: 'plantNutritionValueInput', val: 'plantNutritionValueValue', isFloat: true, fixed: 2 },
+    { input: 'plantRegrowthPowerInput', val: 'plantRegrowthPowerValue', isFloat: true, fixed: 1 },
+    { input: 'maxHerbivoreInput', val: 'maxHerbivoreValue', isFloat: false },
+    { input: 'herbivoreSatietyLossInput', val: 'herbivoreSatietyLossValue', isFloat: true, fixed: 3 },
+    { input: 'herbivoreMaxSatietyInput', val: 'herbivoreMaxSatietyValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreAvgGestationInput', val: 'herbivoreAvgGestationValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreGestationStdInput', val: 'herbivoreGestationStdValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreMinReproductionSatietyInput', val: 'herbivoreMinReproductionSatietyValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreReproductionLossInput', val: 'herbivoreReproductionLossValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreEatPercentThresholdInput', val: 'herbivoreEatPercentThresholdValue', isFloat: false },
+    { input: 'herbivoreFOVInput', val: 'herbivoreFOVValue', isFloat: true, fixed: 2 },
+    { input: 'herbivoreVisionRangeInput', val: 'herbivoreVisionRangeValue', isFloat: false },
+    { input: 'herbivoreAvgAgeInput', val: 'herbivoreAvgAgeValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreAgeStdInput', val: 'herbivoreAgeStdValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreMinAgeReproductionInput', val: 'herbivoreMinAgeReproductionValue', isFloat: true, fixed: 1 }
+];
+inputsConfig.forEach(cfg => {
+    const el = document.getElementById(cfg.input);
+    const valEl = document.getElementById(cfg.val);
+    if (el && valEl) {
+        el.addEventListener('input', (e) => {
+            const parsed = cfg.isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10);
+            valEl.textContent = cfg.isFloat ? parsed.toFixed(cfg.fixed) : parsed;
+        });
+    }
+});
 
 async function fetchState() {
     const response = await fetch('/state');
@@ -525,109 +564,11 @@ function drawLiveNeuralNetwork(nn) {
     });
 }
 
-function drawLiveNeuralNetwork_stable(nn) {
-    if (!nn || !nn.hidden_dim_1 || !nn.output) {
-        networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
-        return;
-    }
-
-    const w = networkCanvas.width;
-    const h = networkCanvas.height;
-    const padding = 20;
-
-    networkCtx.clearRect(0, 0, w, h);
-    networkCtx.fillStyle = '#f5f7fb';
-    networkCtx.fillRect(0, 0, w, h);
-
-    // --- layer sizes from live brain ---
-    const input = nn.inputs;
-    const h1 = nn.hidden_dim_1;
-    const h2 = nn.hidden_dim_2;
-    const out = nn.output;
-
-    const layers = [
-        { values: input, x: 60 },
-        { values: h1, x: w * 0.33 },
-        { values: h2, x: w * 0.66 },
-        { values: out, x: w - 60 }
-    ];
-
-    const nodeRadius = 6;
-
-    const getY = (layerIndex, i) => {
-        const layer = layers[layerIndex];
-        const spacing = (h - 2 * padding) / Math.max(layer.values.length - 1, 1);
-        return padding + i * spacing;
-    };
-
-    // --- draw connections as faint structure (no weights now) ---
-    for (let l = 0; l < layers.length - 1; l++) {
-        const from = layers[l];
-        const to = layers[l + 1];
-
-        for (let i = 0; i < from.values.length; i++) {
-            for (let j = 0; j < to.values.length; j++) {
-                networkCtx.beginPath();
-                networkCtx.moveTo(from.x, getY(l, i));
-                networkCtx.lineTo(to.x, getY(l + 1, j));
-                networkCtx.strokeStyle = 'rgba(120,120,140,0.15)';
-                networkCtx.lineWidth = 1;
-                networkCtx.stroke();
-            }
-        }
-    }
-
-    // --- draw nodes with activation glow ---
-    const drawLayer = (layerIndex) => {
-        const layer = layers[layerIndex];
-
-        for (let i = 0; i < layer.values.length; i++) {
-            const v = layer.values[i];
-
-            // normalize activation (-1..1)
-            const n = Math.max(-1, Math.min(1, v));
-
-            const red = Math.round(Math.max(0, -n) * 255);
-            const green = Math.round(Math.max(0, n) * 255);
-            const alpha = 0.3 + Math.abs(n) * 0.7;
-
-            const x = layer.x;
-            const y = getY(layerIndex, i);
-
-            // glow
-            networkCtx.beginPath();
-            networkCtx.arc(x, y, nodeRadius + Math.abs(n) * 4, 0, Math.PI * 2);
-            networkCtx.fillStyle = `rgba(${red},${green},80,${alpha * 0.4})`;
-            networkCtx.fill();
-
-            // core node
-            networkCtx.beginPath();
-            networkCtx.arc(x, y, nodeRadius, 0, Math.PI * 2);
-            networkCtx.fillStyle = `rgba(${red},${green},80,${alpha})`;
-            networkCtx.fill();
-        }
-    };
-
-    for (let i = 0; i < layers.length; i++) {
-        drawLayer(i);
-    }
-
-    // labels
-    networkCtx.fillStyle = '#111827';
-    networkCtx.font = '12px Arial';
-    networkCtx.textAlign = 'center';
-
-    const labels = ['Input', 'Hidden 1', 'Hidden 2', 'Output'];
-    const xs = [60, w * 0.33, w * 0.66, w - 60];
-
-    for (let i = 0; i < labels.length; i++) {
-        networkCtx.fillText(labels[i], xs[i], h - 5);
-    }
-}
-
 function updateStatsPanel(message) {
     statsEl.innerHTML = message;
 }
+
+
 
 async function fetchAnimalStats(species, id) {
     const response = await fetch(`/animal/${species}/${id}`);
@@ -636,6 +577,84 @@ async function fetchAnimalStats(species, id) {
     }
     return response.json();
 }
+
+// --- VIEW CONTROLLER FUNCTIONS ---
+function openSettings() {
+    stopLoop(); // Pauses the simulation
+    simView.style.display = 'none';
+    settingsView.style.display = 'block';
+}
+
+function closeSettings() {
+    settingsView.style.display = 'none';
+    simView.style.display = 'block';
+    startLoop(); // Resumes and unpauses the simulation
+}
+
+// --- EVENT LISTENERS ---
+settingsButton.addEventListener('click', openSettings);
+backButton.addEventListener('click', closeSettings);
+
+restartSettingsButton.addEventListener('click', async () => {
+    // Helper function to extract cleanly parsed input DOM data
+    const getVal = (id, isFloat) => {
+        const value = document.getElementById(id).value;
+        return isFloat ? parseFloat(value) : parseInt(value, 10);
+    };
+
+    const dataToSend = {
+        world_speed_multiplier: getVal('worldSpeedInput', true),
+        global_mutation_rate: getVal('globalMutationRateInput', true),
+        global_mutation_strength: getVal('globalMutationStrengthInput', true),
+        max_plant: getVal('maxPlantInput', false),
+        plant_size: getVal('plantSizeInput', true),
+        plant_nutrition_value: getVal('plantNutritionValueInput', true),
+        plant_regrowth_power: getVal('plantRegrowthPowerInput', true),
+        max_herbivore: getVal('maxHerbivoreInput', false),
+        herbivore_satiety_loss_factor: getVal('herbivoreSatietyLossInput', true),
+        herbivore_max_satiety: getVal('herbivoreMaxSatietyInput', true),
+        herbivore_avg_gestation_time: getVal('herbivoreAvgGestationInput', true),
+        herbivore_gestation_time_std_dev: getVal('herbivoreGestationStdInput', true),
+        herbivore_reproduction_minimum_satiety: getVal('herbivoreMinReproductionSatietyInput', true),
+        herbivore_reproduction_satiety_loss: getVal('herbivoreReproductionLossInput', true),
+        // Convert slider percent (e.g. 75) back to float proportion (0.75) for the Python backend
+        herbivore_max_percent_satiety_to_eat: getVal('herbivoreEatPercentThresholdInput', false) / 100,
+        herbivore_FOV: getVal('herbivoreFOVInput', true),
+        herbivore_vision_range: getVal('herbivoreVisionRangeInput', false),
+        herbivore_avg_age: getVal('herbivoreAvgAgeInput', true),
+        herbivore_age_std_dev: getVal('herbivoreAgeStdInput', true),
+        herbivore_min_age_to_reproduce: getVal('herbivoreMinAgeReproductionInput', true)
+    };
+
+    try {
+        const response = await fetch('/restart_simulation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSend)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to restart: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log(result.message);
+
+        // Reset tracking states for the live population visualization chart
+        chart_last_time = -1;
+        populationChart.data.labels = [];
+        populationChart.data.datasets.forEach(dataset => dataset.data = []);
+        populationChart.update();
+
+        // Close overlay pane context and automatically unpause
+        closeSettings();
+
+    } catch (error) {
+        console.error('Error while sending restart configurations:', error);
+        alert('Could not restart simulation with current parameters.');
+    }
+});
+
 
 canvas.addEventListener('click', async (event) => {
     if (!lastState) return;
@@ -664,34 +683,22 @@ canvas.addEventListener('click', async (event) => {
 
     if (!selection) {
         // click empty space: deselect
-        // selectedAnimal = null;
         sendSelection(null, null);
 
-        //drawNeuralNetwork(null);
         drawState(lastState);
         return;
     }
 
     // Toggle deselect when clicking the already selected animal
     if (lastState.selected && lastState.selected.species === selection.species && lastState.selected.id === selection.id) {
-        // selectedAnimal = null;
         sendSelection(null, null);
-        //drawNeuralNetwork(null);
         drawState(lastState);
         return;
     }
-    // Select new animal and initialize panel from current state; fetch detailed stats in background
-    //const instant = (selection.species === 'predator' ? (lastState.predators || []) : (lastState.herbivores || [])).find((a) => a.id === selection.id);
-    //selectedAnimal = {
-    //    species: selection.species,
-    //    id: selection.id,
-    //    generation: instant?.generation,
-    //};
 
     sendSelection(selection.species, selection.id); // inform backend about selection so it can prepare detailed stats (like NN activations) for this animal
     // Fetch full stats and update panel when ready 
     const temp_state = await fetchState();
-    //selectedAnimal.generation = temp_state.selected.generation;
     updateStatsPanel(formatStats(temp_state.selected));
     drawState(temp_state);
 });
@@ -770,12 +777,22 @@ stepButton.addEventListener('click', async () => {
     }
 });
 
-saveButton.addEventListener('click', async () => {
-    fetch('/save', { method: 'POST' })
+saveButton.addEventListener('click', () => {
+    window.location.href = '/save';
 });
 
-loadButton.addEventListener('click', async () => {
-    fetch('/load', { method: 'POST' }).then(() => location.reload());
+// Load — hidden file input, triggered by button click
+const loadInput = document.getElementById('loadInput'); // hidden <input type="file">
+document.getElementById('loadButton').addEventListener('click', () => {
+    loadInput.click();
+});
+loadInput.addEventListener('change', async () => {
+    const file = loadInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    await fetch('/load', { method: 'POST', body: formData });
+    location.reload();
 });
 
 window.addEventListener('load', async () => {
@@ -790,4 +807,9 @@ window.addEventListener('load', async () => {
         statusEl.textContent = 'Unable to load simulation state.';
         console.error(error);
     }
+});
+
+// Settings:
+plantRegrowthInput.addEventListener('input', (e) => {
+    plantRegrowthValue.textContent = parseFloat(e.target.value).toFixed(1);
 });
