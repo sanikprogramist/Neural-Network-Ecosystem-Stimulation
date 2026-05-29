@@ -20,7 +20,7 @@ def serve_index():
 
 world = World()
 world.spawn_food(150)
-world.spawn_herbivore(50)
+world.spawn_herbivore(100)
 world.spawn_predator(0)
 
 

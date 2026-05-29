@@ -29,13 +29,13 @@ def find_nearest_visible_target(
         vision_fov: scalar, full field of view in radians
     
     Returns:
-        norm_dist: (N,) — normalised distance 1 - dist/vision_range, or -1 if nothing visible
+        norm_dist: (N,) — normalised distance 1 - dist/vision_range, or 0 if nothing visible
         norm_angle: (N,) — normalised angle relative to heading, in range [-1, 1], or 0 if nothing visible
     """
     N = observer_positions.shape[0]
     half_fov = vision_fov / 2.0
  
-    norm_dist  = np.full(N, -1.0, dtype=np.float32)
+    norm_dist  = np.full(N, 0.0, dtype=np.float32)
     norm_angle = np.zeros(N, dtype=np.float32)
  
     if target_positions.shape[0] == 0:
@@ -70,11 +70,11 @@ def find_nearest_visible_target(
     # Check which observers found anything
     any_visible = nearest_dist < np.inf
  
-    # Normalised distance: 1 - dist/vision_range, or -1 if nothing found
+    # Normalised distance: 1 - dist/vision_range, or 0 if nothing found
     norm_dist = np.where(
         any_visible,
         1.0 - nearest_dist / vision_range,
-        -1.0
+        0.0
     ).astype(np.float32)
  
     # Normalised angle: relative angle / half_fov, clamped to [-1, 1], or 0 if nothing found
@@ -137,6 +137,18 @@ def herbivores_perception_function(
  
     return output
 
+def calculate_brain_similarity(brain_1: AnimalBrain, brain_2: AnimalBrain):
+    total_diff = 0.0
+    total_params = 0
+
+    for b1_param, b2_param in zip(brain_1.parameters(),brain_2.parameters()):
+
+        diff = b2_param.data - b1_param.data
+
+        total_diff += torch.sum(diff * diff).item()
+        total_params += diff.numel()
+
+    return np.sqrt(total_diff / total_params) 
 
 def predator_section_vision_self_and_food(
     self_positions,
@@ -225,13 +237,129 @@ def get_color_from_label(label):
             return (0, 0, 255, 100)
         else:
             return (100, 100, 100, 80)
-        
+
 def resize_layer_in_animal_brain(
+    brain: AnimalBrain,
+    layer: str,
+    new_size: int,
+    init_std: float = 0.1,
+) -> AnimalBrain:
+    """
+    Returns a new AnimalBrain with the specified layer resized.
+    When shrinking, neurons to remove are chosen randomly.
+    When growing, new neurons are randomly initialised.
+    The corresponding input columns in the next layer are updated to match.
+    """
+    input_dim = brain.fc1.in_features
+    old_h1    = brain.fc1.out_features
+    old_h2    = brain.fc2.out_features
+
+    new_h1 = new_size if layer == "fc1" else old_h1
+    new_h2 = new_size if layer == "fc2" else old_h2
+
+    if layer not in ("fc1", "fc2"):
+        raise ValueError("Layer must be 'fc1' or 'fc2'")
+
+    new_brain = AnimalBrain(
+        n_external_infos=input_dim,
+        n_self_infos=0,
+        hidden_dim_1=new_h1,
+        hidden_dim_2=new_h2
+    )
+
+    with torch.no_grad():
+
+        # --- Which neurons survive? ---
+        # keep_h1: indices of fc1 output neurons to keep (relevant when fc1 shrinks)
+        # keep_h2: indices of fc2 output neurons to keep (relevant when fc2 shrinks)
+
+        if new_h1 < old_h1:
+            keep_h1 = np.sort(np.random.choice(old_h1, new_h1, replace=False))
+        else:
+            keep_h1 = np.arange(old_h1)
+
+        if new_h2 < old_h2:
+            keep_h2 = np.sort(np.random.choice(old_h2, new_h2, replace=False))
+        else:
+            keep_h2 = np.arange(old_h2)
+
+        # ── fc1 ─────────────────────────────────────────────────────────────
+        # weight shape: (h1, input_dim)  — rows = output neurons
+
+        old_w = brain.fc1.weight.data
+        if new_h1 <= old_h1:
+            new_brain.fc1.weight.data[:, :] = old_w[keep_h1, :]
+        else:
+            # Growing: copy all old rows, init new rows
+            new_brain.fc1.weight.data[:old_h1, :] = old_w
+            nn.init.normal_(new_brain.fc1.weight.data[old_h1:, :], std=init_std)
+
+        # bias shape: (h1,) — same indexing as rows
+        if brain.fc1.bias is not None:
+            old_b = brain.fc1.bias.data
+            if new_h1 <= old_h1:
+                new_brain.fc1.bias.data[:] = old_b[keep_h1]
+            else:
+                new_brain.fc1.bias.data[:old_h1] = old_b
+                nn.init.normal_(new_brain.fc1.bias.data[old_h1:], std=init_std)
+
+        # ── fc2 ─────────────────────────────────────────────────────────────
+        # weight shape: (h2, h1) — rows = output neurons, cols = inputs from fc1
+
+        old_w = brain.fc2.weight.data  # (old_h2, old_h1)
+
+        # Step 1: trim/expand columns to match new fc1 output size
+        if new_h1 <= old_h1:
+            old_w = old_w[:, keep_h1]          # (old_h2, new_h1)
+        # if fc1 grew, new columns will be inited below
+
+        # Step 2: trim/expand rows for fc2 resize
+        min_h2     = min(old_h2, new_h2)
+        min_h1_cols = min(old_h1, new_h1)
+
+        if new_h2 <= old_h2:
+            new_brain.fc2.weight.data[:, :min_h1_cols] = old_w[keep_h2, :]
+        else:
+            new_brain.fc2.weight.data[:old_h2, :min_h1_cols] = old_w
+            nn.init.normal_(new_brain.fc2.weight.data[old_h2:, :min_h1_cols], std=init_std)
+
+        # If fc1 grew: init the new input columns in fc2
+        if new_h1 > old_h1:
+            nn.init.normal_(new_brain.fc2.weight.data[:min_h2, old_h1:], std=init_std)
+
+
+        # bias shape: (h2,)
+        if brain.fc2.bias is not None:
+            old_b = brain.fc2.bias.data
+            if new_h2 <= old_h2:
+                new_brain.fc2.bias.data[:] = old_b[keep_h2]
+            else:
+                new_brain.fc2.bias.data[:old_h2] = old_b
+                nn.init.normal_(new_brain.fc2.bias.data[old_h2:], std=init_std)
+
+        # ── out ──────────────────────────────────────────────────────────────
+        # weight shape: (output_dim=2, h2) — cols = inputs from fc2
+
+        old_w = brain.out.weight.data  # (2, old_h2)
+
+        if new_h2 <= old_h2:
+            new_brain.out.weight.data[:, :] = old_w[:, keep_h2]
+        else:
+            new_brain.out.weight.data[:, :old_h2] = old_w
+            nn.init.normal_(new_brain.out.weight.data[:, old_h2:], std=init_std)
+
+        # bias shape: (output_dim=2,) — always same size, always copy directly
+        if brain.out.bias is not None:
+            new_brain.out.bias.data[:] = brain.out.bias.data
+
+    return new_brain
+
+
+def resize_layer_in_animal_brain_old(
     brain: AnimalBrain,
     layer: str,                # "fc1" or "fc2"
     new_size: int,             # desired new size of that layer's output dimension
     init_std: float = 0.1,     # std for initializing new weights
-    clip_value: float = 1.0    # clip range [-clip_value, clip_value]
     ) -> AnimalBrain:
     """
     Returns a new AnimalBrain with the specified layer resized (increase or decrease),
@@ -268,7 +396,6 @@ def resize_layer_in_animal_brain(
             nn.init.normal_(new_w[min_o:, :], mean=0.0, std=init_std)
         if new_w.shape[1] > old_w.shape[1]:
             nn.init.normal_(new_w[:, min_i:], mean=0.0, std=init_std)
-        new_w.clamp_(-clip_value, clip_value)
 
         # Resize and copy fc2
         old_w = brain.fc2.weight
@@ -279,7 +406,6 @@ def resize_layer_in_animal_brain(
             nn.init.normal_(new_w[min_o:, :], mean=0.0, std=init_std)
         if new_w.shape[1] > old_w.shape[1]:
             nn.init.normal_(new_w[:, min_i:], mean=0.0, std=init_std)
-        new_w.clamp_(-clip_value, clip_value)
 
         # Resize and copy out
         old_w = brain.out.weight
@@ -290,6 +416,5 @@ def resize_layer_in_animal_brain(
             nn.init.normal_(new_w[min_o:, :], mean=0.0, std=init_std)
         if new_w.shape[1] > old_w.shape[1]:
             nn.init.normal_(new_w[:, min_i:], mean=0.0, std=init_std)
-        new_w.clamp_(-clip_value, clip_value)
 
     return new_brain

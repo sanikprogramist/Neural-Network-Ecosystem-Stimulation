@@ -177,13 +177,13 @@ function drawVisionOverlay(animal, scaleX, scaleY) {
  
     // ── 2. Detection lines ────────────────────────────────────────────────────
     const targets = [
-        { normDist: data[0], normAngle: data[1], color: '#3ecf60', label: 'plant'       },
+        { normDist: data[0], normAngle: data[1], color: '#3ecf60', label: 'food'       },
         { normDist: data[2], normAngle: data[3], color: '#5a9ff5', label: 'conspecific'  },
         { normDist: data[4], normAngle: data[5], color: '#e84545', label: 'predator'     },
     ];
  
     targets.forEach(({ normDist, normAngle, color }) => {
-        if (normDist < 0) return; // nothing detected for this type
+        if (normDist <= 0.0001) return; // nothing detected for this type
  
         const { dx, dy } = visionVecToCanvas(
             normDist, normAngle, heading, visionRange, halfFov, scaleX, scaleY

@@ -24,7 +24,9 @@ class AnimalBrain(nn.Module):
         n_external_infos: int,
         n_self_infos: int,
         hidden_dim_1: int = 12,
-        hidden_dim_2: int = 12
+        hidden_dim_2: int = 12,
+        initial_weight_std: float = 0.1,
+        initial_bias_std: float = 0.05
     ):
         """
         Parameters
@@ -59,7 +61,7 @@ class AnimalBrain(nn.Module):
         Notes
         -----
         The input dimensionality formula is:
-            (n_external_infos + 1) * n_self_info
+            n_external_infos + n_self_infos
         The additional terms capture internal agent states (e.g., current speed,
         energy level, or similar self-awareness signals).
         """
@@ -72,10 +74,20 @@ class AnimalBrain(nn.Module):
         # Output: [forward_speed, angular_velocity]
         output_dim = 2
 
-        # A compact fully-connected architecture, no biases for evolutionary simplicity.
-        self.fc1 = nn.Linear(input_dim, hidden_dim_1, bias=False)
-        self.fc2 = nn.Linear(hidden_dim_1, hidden_dim_2, bias=False)
-        self.out = nn.Linear(hidden_dim_2, output_dim, bias=False)
+        # A fully-connected architecture
+        self.fc1 = nn.Linear(input_dim, hidden_dim_1, bias=True)
+        self.fc2 = nn.Linear(hidden_dim_1, hidden_dim_2, bias=True)
+        self.out = nn.Linear(hidden_dim_2, output_dim, bias=True)
+
+        # === Custom weight initialization ===
+        nn.init.normal_(self.fc1.weight, mean=0, std=initial_weight_std)
+        nn.init.normal_(self.fc2.weight, mean=0, std=initial_weight_std)
+        nn.init.normal_(self.out.weight, mean=0, std=initial_weight_std)
+
+        # === Custom bias initialization ===
+        nn.init.normal_(self.fc1.bias, mean=0, std=initial_bias_std)
+        nn.init.normal_(self.fc2.bias, mean=0, std=initial_bias_std)
+        nn.init.normal_(self.out.bias, mean=0, std=initial_bias_std)
 
     def forward(self, x: torch.Tensor, return_activations: bool = False) -> torch.Tensor:
         """
