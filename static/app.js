@@ -569,21 +569,72 @@ function updateStatsPanel(message) {
     statsEl.innerHTML = message;
 }
 
-
-
-async function fetchAnimalStats(species, id) {
-    const response = await fetch(`/animal/${species}/${id}`);
-    if (!response.ok) {
-        throw new Error(`Unable to load stats for ${species} ${id}`);
-    }
-    return response.json();
-}
-
 // --- VIEW CONTROLLER FUNCTIONS ---
-function openSettings() {
-    stopLoop(); // Pauses the simulation
+async function openSettings() {
+    stopLoop(); // Pause the simulation loop
+    
+    // Fetch live backend parameters before rendering the menu layout
+    await syncSlidersWithBackend();
+
     simView.style.display = 'none';
     settingsView.style.display = 'block';
+}
+
+// Function to fetch active configurations and apply them to DOM element positions
+async function syncSlidersWithBackend() {
+    try {
+        const response = await fetch('/settings');
+        if (!response.ok) throw new Error('Could not retrieve ecosystem configurations.');
+        
+        const settings = await response.json();
+
+        // Object mapping your configuration key names to backend payload JSON keys
+        const dataMap = {
+            'worldSpeedInput': settings.world_speed_multiplier,
+            'globalMutationRateInput': settings.global_mutation_rate,
+            'globalMutationStrengthInput': settings.global_mutation_strength,
+            'maxPlantInput': settings.max_plant,
+            'plantSizeInput': settings.plant_size,
+            'plantNutritionValueInput': settings.plant_nutrition_value,
+            'plantRegrowthPowerInput': settings.plant_regrowth_power,
+            'maxHerbivoreInput': settings.max_herbivore,
+            'herbivoreSatietyLossInput': settings.herbivore_satiety_loss_factor,
+            'herbivoreMaxSatietyInput': settings.herbivore_max_satiety,
+            'herbivoreAvgGestationInput': settings.herbivore_avg_gestation_time,
+            'herbivoreGestationStdInput': settings.herbivore_gestation_time_std_dev,
+            'herbivoreMinReproductionSatietyInput': settings.herbivore_reproduction_minimum_satiety,
+            'herbivoreReproductionLossInput': settings.herbivore_reproduction_satiety_loss,
+            // Multiply ratio (e.g. 0.75) by 100 to sync cleanly back to integer slider scale (75)
+            'herbivoreEatPercentThresholdInput': Math.round(settings.herbivore_max_percent_satiety_to_eat * 100),
+            'herbivoreFOVInput': settings.herbivore_FOV,
+            'herbivoreVisionRangeInput': settings.herbivore_vision_range,
+            'herbivoreAvgAgeInput': settings.herbivore_avg_age,
+            'herbivoreAgeStdInput': settings.herbivore_age_std_dev,
+            'herbivoreMinAgeReproductionInput': settings.herbivore_min_age_to_reproduce
+        };
+
+        // Populate values dynamically across your predefined tracking configurations
+        inputsConfig.forEach(cfg => {
+            const inputEl = document.getElementById(cfg.input);
+            const valueEl = document.getElementById(cfg.val);
+            const liveBackendValue = dataMap[cfg.input];
+
+            if (inputEl && valueEl && liveBackendValue !== undefined) {
+                // Update the visual handle position
+                inputEl.value = liveBackendValue;
+                
+                // Format the displayed numerical text context correctly
+                if (cfg.isFloat) {
+                    valueEl.textContent = liveBackendValue.toFixed(cfg.fixed);
+                } else {
+                    valueEl.textContent = liveBackendValue;
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Failed to sync settings pane with running simulation:', error);
+    }
 }
 
 function closeSettings() {

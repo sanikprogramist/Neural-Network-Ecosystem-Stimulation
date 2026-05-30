@@ -1,11 +1,5 @@
 import numpy as np
-import time
 from class_animal_brain_nn import *
-
-FOOD_LABEL = 1.0
-CONSPECIFIC_LABEL = 0.1
-PREDATOR_LABEL = -1.0
-EMPTY_LABEL = -0.5
 
 def clamp(n, smallest, largest): 
     return max(smallest, min(n, largest))
@@ -137,6 +131,47 @@ def herbivores_perception_function(
  
     return output
 
+def predators_perception_function(
+    self_positions,       # (N, 2)
+    self_angles,          # (N,)
+    food_positions,       # (F, 2) — already filtered to alive herbivores
+    vision_range,         # scalar
+    vision_fov,           # scalar, radians
+):
+    """
+    Compute perception inputs for N predators.
+    
+    Returns array of shape (N, 4):
+        [dist_herbivore, angle_herbivore,
+         dist_conspecific, angle_conspecific]
+    
+    dist values: 1 - dist/vision_range if detected, 0 if nothing seen
+    angle values: relative to heading, normalised to [-1, 1] over FOV
+                  0.0 if nothing seen
+    """
+
+    N = self_positions.shape[0]
+    output = np.zeros((N, 4), dtype=np.float32)
+ 
+    # Herbivores (food for predators)
+    d, a = find_nearest_visible_target(
+        self_positions, self_angles, food_positions,
+        vision_range, vision_fov
+    )
+    output[:, 0] = d
+    output[:, 1] = a
+ 
+    # Conspecifics (exclude self)
+    d, a = find_nearest_visible_target(
+        self_positions, self_angles, self_positions,
+        vision_range, vision_fov,
+        exclude_self=True
+    )
+    output[:, 2] = d
+    output[:, 3] = a
+ 
+    return output
+
 def calculate_brain_similarity(brain_1: AnimalBrain, brain_2: AnimalBrain):
     total_diff = 0.0
     total_params = 0
@@ -149,94 +184,6 @@ def calculate_brain_similarity(brain_1: AnimalBrain, brain_2: AnimalBrain):
         total_params += diff.numel()
 
     return np.sqrt(total_diff / total_params) 
-
-def predator_section_vision_self_and_food(
-    self_positions,
-    self_angles,            # (N_predators,) in radians
-    food_positions,
-    self_num_of_raysections,
-    self_vision_range,
-    self_fov,                # in radians
-    overlap_factor = 0.08,
-    closeby_zone_factor = 0.1
-):
-    N_self = self_positions.shape[0]
-    N_food = food_positions.shape[0]
-
-    # Combine objects
-    all_objects = np.vstack([food_positions, self_positions])
-    object_labels = np.hstack([np.ones(N_food), np.full(N_self, 0.1)])
-
-    # Outputs
-    distances_output = np.zeros((N_self, self_num_of_raysections + 1), dtype=np.float32)  # +1 for closeby zone
-    labels_output = np.full((N_self, self_num_of_raysections + 1), -0.5, dtype=np.float32)  # -0.5 for "nothing"
-    
-    effective_fov = self_fov * (1 + overlap_factor)
-    section_edges = np.linspace(-effective_fov/2, effective_fov/2, self_num_of_raysections + 1)
-
-    closeby_zone_radius = self_vision_range * closeby_zone_factor  # 10% of vision range considered "closeby zone"
-
-    for i in range(N_self):
-        diffs = all_objects - self_positions[i]
-        dists = np.linalg.norm(diffs, axis=1)
-        angles = np.arctan2(diffs[:,1], diffs[:,0]) - self_angles[i]
-        angles = (angles + np.pi) % (2 * np.pi) - np.pi
-
-        within_range = dists <= self_vision_range
-        within_fov = np.abs(angles) <= effective_fov / 2
-        visible = within_range & within_fov
-
-        # Exclude self
-        exclude_self = np.ones(len(all_objects), dtype=bool)
-        exclude_self[N_food + i] = False
-        visible_objects_mask = visible & exclude_self
-
-        # --- CLOSEBY ZONE (index -1) ---
-        closeby_mask = (dists <= closeby_zone_radius) & visible_objects_mask
-        if np.any(closeby_mask):
-            section_dists = dists[closeby_mask]
-            min_idx = np.argmin(section_dists)
-            closest_dist = max(section_dists[min_idx], 1e-2)  # Clamp to avoid 0
-            obj_label = object_labels[closeby_mask][min_idx]
-
-            normalized_dist = 1 - (closest_dist / closeby_zone_radius)
-            distances_output[i, 0] = normalized_dist
-            labels_output[i, 0] = obj_label
-        else:
-            distances_output[i, 0] = 0.0
-            labels_output[i, 0] = -0.5  # nothing
-
-        # --- SECTOR PROCESSING ---
-        for sec in range(self_num_of_raysections):
-            angle_min = section_edges[sec]
-            angle_max = section_edges[sec + 1]
-
-            in_section = (angles >= angle_min) & (angles < angle_max) & visible_objects_mask
-            if np.any(in_section):
-                section_dists = dists[in_section]
-                min_idx = np.argmin(section_dists)
-                closest_dist = max(section_dists[min_idx], 1e-2)  # Clamp
-                obj_label = object_labels[in_section][min_idx]
-
-                normalized_dist = 1 - (closest_dist / self_vision_range)
-                distances_output[i, sec + 1] = normalized_dist
-                labels_output[i, sec + 1] = obj_label
-            else:
-                distances_output[i, sec + 1] = 0.0
-                labels_output[i, sec + 1] = -0.5  # nothing
-
-    return distances_output, labels_output
-
-
-def get_color_from_label(label):
-        if np.isclose(label, FOOD_LABEL):
-            return (0, 255, 0, 100)
-        elif np.isclose(label, PREDATOR_LABEL):
-            return (255, 0, 0, 100)
-        elif np.isclose(label, CONSPECIFIC_LABEL):
-            return (0, 0, 255, 100)
-        else:
-            return (100, 100, 100, 80)
 
 def resize_layer_in_animal_brain(
     brain: AnimalBrain,
@@ -351,70 +298,5 @@ def resize_layer_in_animal_brain(
         # bias shape: (output_dim=2,) — always same size, always copy directly
         if brain.out.bias is not None:
             new_brain.out.bias.data[:] = brain.out.bias.data
-
-    return new_brain
-
-
-def resize_layer_in_animal_brain_old(
-    brain: AnimalBrain,
-    layer: str,                # "fc1" or "fc2"
-    new_size: int,             # desired new size of that layer's output dimension
-    init_std: float = 0.1,     # std for initializing new weights
-    ) -> AnimalBrain:
-    """
-    Returns a new AnimalBrain with the specified layer resized (increase or decrease),
-    preserving existing weights where possible, initializing new weights, and clipping all weights.
-    """
-    # Extract initialization parameters
-    input_dim = brain.fc1.in_features
-    hidden_dim_1 = brain.fc1.out_features
-    hidden_dim_2 = brain.fc2.out_features
-
-    # Update target layer dimension
-    if layer == "fc1":
-        hidden_dim_1 = new_size
-    elif layer == "fc2":
-        hidden_dim_2 = new_size
-    else:
-        raise ValueError("Layer must be 'fc1' or 'fc2'")
-
-    # Create new brain
-    new_brain = AnimalBrain(
-        n_external_infos=input_dim,
-        n_self_infos=0,
-        hidden_dim_1=hidden_dim_1,
-        hidden_dim_2=hidden_dim_2
-    )
-
-    with torch.no_grad():
-        # Resize and copy fc1
-        old_w = brain.fc1.weight
-        new_w = new_brain.fc1.weight
-        min_o, min_i = min(old_w.shape[0], new_w.shape[0]), min(old_w.shape[1], new_w.shape[1])
-        new_w[:min_o, :min_i] = old_w[:min_o, :min_i]
-        if new_w.shape[0] > old_w.shape[0]:
-            nn.init.normal_(new_w[min_o:, :], mean=0.0, std=init_std)
-        if new_w.shape[1] > old_w.shape[1]:
-            nn.init.normal_(new_w[:, min_i:], mean=0.0, std=init_std)
-
-        # Resize and copy fc2
-        old_w = brain.fc2.weight
-        new_w = new_brain.fc2.weight
-        min_o, min_i = min(old_w.shape[0], new_w.shape[0]), min(old_w.shape[1], new_w.shape[1])
-        new_w[:min_o, :min_i] = old_w[:min_o, :min_i]
-        if new_w.shape[0] > old_w.shape[0]:
-            nn.init.normal_(new_w[min_o:, :], mean=0.0, std=init_std)
-        if new_w.shape[1] > old_w.shape[1]:
-            nn.init.normal_(new_w[:, min_i:], mean=0.0, std=init_std)
-
-        # Resize and copy out
-        old_w = brain.out.weight
-        new_w = new_brain.out.weight
-        min_o, min_i = min(old_w.shape[0], new_w.shape[0]), min(old_w.shape[1], new_w.shape[1])
-        new_w[:min_o, :min_i] = old_w[:min_o, :min_i]
-        if new_w.shape[0] > old_w.shape[0]:
-            nn.init.normal_(new_w[min_o:, :], mean=0.0, std=init_std)
-        if new_w.shape[1] > old_w.shape[1]:
-            nn.init.normal_(new_w[:, min_i:], mean=0.0, std=init_std)
 
     return new_brain

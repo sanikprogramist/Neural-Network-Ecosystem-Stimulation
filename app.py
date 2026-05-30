@@ -3,7 +3,7 @@ import io
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -82,41 +82,26 @@ async def load_world(file: UploadFile = File(...)):
 
 @app.get("/state")
 def get_state():
+    #get info about world state from backend
     return world.get_simulation_state()
-
-
-@app.get("/chart")
-def get_chart():
-    return world.get_chart_data()
-
 
 @app.post("/step")
 def step(req: StepRequest):
+    #push world state one step forward
     world.update(req.dt)
     return world.get_simulation_state()
 
 
-@app.post("/spawn")
-def spawn(req: SpawnRequest):
-    if req.food and req.food > 0:
-        world.spawn_food(req.food)
-    if req.herbivores and req.herbivores > 0:
-        world.spawn_herbivore(req.herbivores)
-    if req.predators and req.predators > 0:
-        world.spawn_predator(req.predators)
-    return world.get_simulation_state()
 
-
-@app.post("/speed")
-def set_speed(req: SpeedRequest):
-    if req.multiplier <= 0:
-        raise HTTPException(status_code=400, detail="Multiplier must be positive")
-    world.world_speed_multiplier = req.multiplier
-    return {"world_speed_multiplier": world.world_speed_multiplier}
+@app.get("/chart")
+def get_chart():
+    #get data needed to draw charts from backend
+    return world.get_chart_data()
 
 
 @app.post("/restart_simulation")
 def restart_simulation(req: RestartSettingsRequest):
+    #if user adjusts settings and restarts simulation with new settings
     global world
     
     # 1. Create a fresh world object to clear old entities
@@ -159,21 +144,36 @@ def restart_simulation(req: RestartSettingsRequest):
     
     return {"success": True, "message": "Simulation restarted with new settings"}
 
-
-@app.get("/animal/{species}/{index}")
-def animal_stats(species: str, index: int):
-    try:
-        return world.get_animal_stats(species, index)
-    except (IndexError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        # Unexpected error — return 500 with detail rather than crashing
-        raise HTTPException(status_code=500, detail=f"Internal error fetching animal stats: {exc}")
+@app.get("/settings")
+def get_current_settings():
+    # Reads live configurations directly from the active world instance
+    #so that default settings sliders automatically are set to what teh current setting are
+    return {
+        "world_speed_multiplier": world.world_speed_multiplier,
+        "global_mutation_rate": world.global_mutation_rate,
+        "global_mutation_strength": world.global_mutation_strength,
+        "max_plant": world.max_plant,
+        "plant_size": world.plant_size,
+        "plant_nutrition_value": world.plant_nutrition_value,
+        "plant_regrowth_power": world.plant_regrowth_power,
+        "max_herbivore": world.max_herbivore,
+        "herbivore_satiety_loss_factor": world.herbivore_satiety_loss_factor,
+        "herbivore_max_satiety": world.herbivore_max_satiety,
+        "herbivore_avg_gestation_time": world.herbivore_avg_gestation_time,
+        "herbivore_gestation_time_std_dev": world.herbivore_gestation_time_std_dev,
+        "herbivore_reproduction_minimum_satiety": world.herbivore_reproduction_minimum_satiety,
+        "herbivore_reproduction_satiety_loss": world.herbivore_reproduction_satiety_loss,
+        "herbivore_max_percent_satiety_to_eat": world.herbivore_max_percent_satiety_to_eat,
+        "herbivore_FOV": world.herbivore_FOV,
+        "herbivore_vision_range": world.herbivore_vision_range,
+        "herbivore_avg_age": world.herbivore_avg_age,
+        "herbivore_age_std_dev": world.herbivore_age_std_dev,
+        "herbivore_min_age_to_reproduce": world.herbivore_min_age_to_reproduce
+    }
 
 @app.post("/select_animal")
-#this is the frontend click selection sending a message to the backend to set the selected animal index
 def select_animal(data: dict):
-
+    #this is the frontend click selection sending a message to the backend to set the selected animal index
     species = data.get("species")
     animal_id = data.get("id")
 
