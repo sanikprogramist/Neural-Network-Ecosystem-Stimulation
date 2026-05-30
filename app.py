@@ -21,7 +21,7 @@ def serve_index():
 world = World()
 world.spawn_food(200)
 world.spawn_herbivore(200)
-world.spawn_predator(0)
+world.spawn_predator(50)
 
 
 class StepRequest(BaseModel):
@@ -179,7 +179,12 @@ def select_animal(data: dict):
 
     if species == "herbivore":
         world.selected_herbivore_index = animal_id
+        world.selected_predator_index = None
+    elif species == "predator":
+        world.selected_predator_index = animal_id
+        world.selected_herbivore_index = None        
     else:
         world.selected_herbivore_index = None
-
+        world.selected_predator_index = None
+        
     return {"success": True}

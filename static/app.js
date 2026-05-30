@@ -249,13 +249,13 @@ function drawState(state) {
     // --- Vision overlay (drawn before animals so animals appear on top) ---
     if (state.selected) {
         if (state.selected.species === 'herbivore') {
-            if (state.selected && state.selected.nn_distances_angles) {
-                drawVisionOverlay(state.selected, scaleX, scaleY);
-                drawLiveNeuralNetwork(state.selected);
-                updateStatsPanel(formatStats(state.selected)); 
-            } // there are two selection logics going on and i need to fix it later
+            drawVisionOverlay(state.selected, scaleX, scaleY);
+            drawLiveNeuralNetwork(state.selected);
+            updateStatsPanel(formatStats(state.selected)); 
         } else if (state.selected.species === 'predator') {
             console.log('Vision overlay for predators not implemented yet');
+            console.log('Neural Network visualization for predators not implemented yet');
+            updateStatsPanel(formatStats(state.selected));
         }
     } else {
         drawLiveNeuralNetwork(null);
@@ -401,19 +401,7 @@ function updateStatsPanel(message) {
     statsEl.innerHTML = message;
 }
 
-let neuralNetPulsesEnabled = false;
- 
-// Call once after DOM loaded to wire up the toggle button
-function initNeuralNetControls() {
-    const btn = document.getElementById('pulseToggleButton');
-    if (btn) {
-        btn.textContent = 'Pulses: OFF';
-        btn.addEventListener('click', () => {
-            neuralNetPulsesEnabled = !neuralNetPulsesEnabled;
-            btn.textContent = neuralNetPulsesEnabled ? 'Pulses: ON' : 'Pulses: OFF';
-        });
-    }
-}
+let neuralNetPulsesEnabled = true;
  
 function drawLiveNeuralNetwork(nn) {
     if (!nn || !nn.hidden_dim_1 || !nn.output) {
@@ -747,7 +735,7 @@ canvas.addEventListener('click', async (event) => {
         drawState(lastState);
         return;
     }
-
+    console.log('selected species and id:',selection.species, selection.id);
     sendSelection(selection.species, selection.id); // inform backend about selection so it can prepare detailed stats (like NN activations) for this animal
     // Fetch full stats and update panel when ready 
     const temp_state = await fetchState();
@@ -859,9 +847,4 @@ window.addEventListener('load', async () => {
         statusEl.textContent = 'Unable to load simulation state.';
         console.error(error);
     }
-});
-
-// Settings:
-plantRegrowthInput.addEventListener('input', (e) => {
-    plantRegrowthValue.textContent = parseFloat(e.target.value).toFixed(1);
 });

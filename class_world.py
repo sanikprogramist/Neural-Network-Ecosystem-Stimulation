@@ -41,7 +41,7 @@ class World:
         self.global_mutation_strength = 0.04 #M
         self.colour_change_strength = 15
         self.min_hidden_dim_size = 2 # starting bound - they might evolve smaller or larger
-        self.max_hidden_dim_size = 4 # starting bound
+        self.max_hidden_dim_size = 5 # starting bound
         self.weight_std_for_new_neurons = 0.35
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
 
@@ -58,23 +58,25 @@ class World:
         self.plant_reproduction_interval = 15 / self.plant_regrowth_power #5.5 originally
 
         #predators # we dont add predator settings rn because their mechanics are very outdated
-        self.max_predator = 70 #y
+        self.max_predator = 1000 #y
         self.predator_size = 5 #y
-        self.predator_satiety_loss_factor = 0.006 #y
+        self.predator_satiety_loss_factor = 0.005 #y
         self.predator_max_satiety = 2 #y
         self.predator_avg_gestation_time = 32 #y
         self.predator_gestation_time_std_dev = 5 #y
         self.predator_reproduction_minimum_satiety = 1.0 #y
-        self.predator_reproduction_satiety_loss = 0.5 #y
+        self.predator_reproduction_satiety_loss = 0.4 #y
         self.predator_max_percent_satiety_to_eat = 0.75 # they wont eat if their satiety is above this percentage
         self.predator_FOV = np.pi/3 #y
-        #self.predator_num_of_raysections = 5
         self.predator_vision_range = 220 #y
-        self.predator_avg_age = 110 #y
+        self.predator_avg_age = 120 #y
         self.predator_age_std_dev = 7 #y
-        self.predator_min_age_to_reproduce = 28 #y
+        self.predator_min_age_to_reproduce = 24 #y
         self.predator_top_n = 20
-        self.predator_resurrection_delay_counter = 0.0
+        #for ressurecting extinct predators:
+        self.predators_resurrect_after_herbivores_reach = 120
+        self.predator_resurrection_delay_counter = 0
+        self.start_resurrecting_predators = False 
 
         #herbivores
         self.max_herbivore = 2000 #M
@@ -93,7 +95,7 @@ class World:
         self.herbivore_min_age_to_reproduce = 23 #M # they wont reproduce if they are younger than this
         self.herbivore_nutrition_value = 1.0 #how much satiety predators get from eating a herbivore.
         self.herbivore_top_n = 20
-        self.herbivore_resurrection_delay_counter = 0.0
+        self.herbivores_resurrect_after_plants_reach = 200
 
         #DO NOT EDIT
         self.plant_positions = np.zeros((self.max_plant,2))
@@ -457,10 +459,8 @@ class World:
     
     def herbivores_check_resurrect(self, dt):
         if np.sum(self.alive_herbivore_array) == 0:
-            self.herbivore_resurrection_delay_counter += dt * self.world_speed_multiplier
-            if self.herbivore_resurrection_delay_counter > 15.0: # wait for plants to regrow
+            if np.sum(self.alive_plant_array) > 0.65 * self.max_plant: # wait for plants to regrow
                 self.resurrect_herbivores(self.herbivore_resurrection_count, self.herbivore_resurrection_random_count)
-                self.herbivore_resurrection_delay_counter = 0.0
 
     def herbivores_die_of_natural_causes(self, dt):
         #check is anyone starved
@@ -754,23 +754,42 @@ class World:
 ################ ---------------------------------------------- PREDATORS ----------------------------------------------- ################
 ################ ---------------------------------------------- PREDATORS ----------------------------------------------- ################
     def update_predators(self,dt): # master function that includes all the rest
-        self.predators_die_of_natural_causes(dt) 
-        self.predators_perceive() # calculate raysection casting outputs
-        self.predators_process_NN() # push raysection casting outputs into the NNs, get movement parameters out
+        self.predators_check_resurrect(dt) #check if they are extinct and res in some time
+        self.predators_die_of_natural_causes(dt) #check if they died from starving or old age
+        self.predators_perceive() # calculate what the animal sees - nn inputs
+        self.predators_process_NN(dt) # push inputs from last function into the NNs, get movement parameters out
         self.predators_move(dt) # update new positions using the parameters from previous function
-        self.check_predator_herbivore_collisions() # check if they collided with food
+        self.check_predator_herbivore_collisions() # check if they collided with herbivores
         self.predators_reproduce(dt) # check if they reproduce 
     
     def predators_check_resurrect(self, dt):
-        if np.sum(self.alive_predator_array) == 0:
-            self.predator_resurrection_delay_counter += dt * self.world_speed_multiplier
-            if self.predator_resurrection_delay_counter > 15.0: # wait for plants to regrow
-                self.resurrect_predators(self.predator_resurrection_count, self.predator_resurrection_random_count)
-                self.predator_resurrection_delay_counter = 0.0
+        if (np.sum(self.alive_predator_array) == 0) and (np.sum(self.alive_herbivore_array) > 120):
+            self.start_resurrecting_predators = True
+        if not self.start_resurrecting_predators:
+            return
+
+        # every 5 seconds, spawn a random amount between 1 and 5 until that number reaches the res count
+        # then spawn random ones every 5 seconds until it reaches the res count+random res count
+        self.predator_resurrection_delay_counter += dt * self.world_speed_multiplier
+        if self.predator_resurrection_delay_counter < 5.0:
+            return
+        
+        self.predator_resurrection_delay_counter = 0.0
+        if self.already_resurrected_predators <= self.predator_resurrection_count:
+            to_res = np.random.randint(low=1, high=6)[0]
+            self.resurrect_predators(to_res, 0)
+            self.already_resurrected_predators += to_res
+        elif self.already_ressurrected_predators <= self.predator_resurrection_count + self.predator_resurrection_random_count: 
+            to_res = np.random.randint(low=1, high=6)[0]
+            self.spawn_predator(to_res, parent_index=-1)
+            self.already_resurrected_predators += to_res
+        else:
+            self.start_resurrecting_predators = False
+            self.already_resurrected_predators = 0
   
     def predators_die_of_natural_causes(self, dt): 
         #check is anyone starved
-        self.predator_satiety[self.alive_predator_array] -= (self.predator_satiety_loss_factor * 3 * abs(self.predator_speeds[self.alive_predator_array]/self.max_speed) + 5 * self.predator_satiety_loss_factor) * dt * self.world_speed_multiplier
+        self.predator_satiety[self.alive_predator_array] -= (self.predator_satiety_loss_factor * 6 * abs(self.predator_speeds[self.alive_predator_array]/self.max_speed) + 2 * self.predator_satiety_loss_factor) * dt * self.world_speed_multiplier
         died_starvation = self.alive_predator_array & (self.predator_satiety <= 0)
         self.alive_predator_array &= (self.predator_satiety > 0)
 
@@ -906,7 +925,7 @@ class World:
         np.clip(self.predator_satiety, -1, self.predator_max_satiety, out=self.predator_satiety)
 
         # update fitness of predators that ate
-        self.predator_fitness[predators_that_ate_indices] += (1 + self.predator_dist_since_last_meal[predators_that_ate_indices] * self.fitness_distance_multiplier)
+        self.predator_fitnesses[predators_that_ate_indices] += (1 + self.predator_dist_since_last_meal[predators_that_ate_indices] * self.fitness_distance_multiplier)
         self.herbivore_dist_since_last_meal[predators_that_ate_indices] = 0.0
 
         # Mark herbivores as dead
