@@ -19,8 +19,8 @@ def serve_index():
     return FileResponse(static_dir / "index.html")
 
 world = World()
-world.spawn_food(150)
-world.spawn_herbivore(100)
+world.spawn_food(200)
+world.spawn_herbivore(200)
 world.spawn_predator(0)
 
 

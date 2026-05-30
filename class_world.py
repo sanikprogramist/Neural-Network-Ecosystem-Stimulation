@@ -21,6 +21,7 @@ from class_animal_brain_nn import *
 # 12. im not sure if spawn things work properly
 # 13. settings sliders in settings page currently dont read default values from world itself
 # 14. start them out with 1 hidden layer, then they can evolve to have more. if they want.
+# 15. no herbivore fitness check when predators eat them
 
 class World:
 
@@ -31,24 +32,31 @@ class World:
         self.world_width = 800
         self.world_height = 600
 
-        self.max_speed = 20 # max speed
+        self.max_speed = 30 # max speed
         self.max_angular_velocity = 3.5 # how fast animals can turn
         self.max_acceleration = 4.0 # how fast animals can speed up and slow down
         self.weight_std_for_new_neurons = 0.35
 
-        self.global_mutation_rate = 0.035 # stable value was 0.1 #M
-        self.global_mutation_strength = 0.04 # stable value was 0.2 #M
+        self.global_mutation_rate = 0.035 #M
+        self.global_mutation_strength = 0.04 #M
         self.colour_change_strength = 15
         self.min_hidden_dim_size = 2 # starting bound - they might evolve smaller or larger
         self.max_hidden_dim_size = 4 # starting bound
 
+        self.starting_herbivore = 100 #MA
+        self.starting_predator = 20 #MA
+        self.starting_plant = 100 #MA
+
+        self.fitness_distance_multiplier = 0.02 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
+
+
         #plants
         self.max_plant = 300 #M
-        self.plant_size = 5 #M
+        self.plant_size = 6 #M
         self.plant_nutrition_value = 0.85 #M
         self.plant_regrowth_power = 1.0 #M already added
-        self.plant_random_spawn_interval = 5 / self.plant_regrowth_power #2.2 originally
-        self.plant_reproduction_interval = 10 / self.plant_regrowth_power #5.5 originally
+        self.plant_random_spawn_interval = 1 / self.plant_regrowth_power #2.2 originally
+        self.plant_reproduction_interval = 15 / self.plant_regrowth_power #5.5 originally
 
         #predators # we dont add predator settings rn because their mechanics are very outdated
         self.max_predator = 70 
@@ -70,17 +78,18 @@ class World:
         self.herbivore_size = 4
         self.herbivore_satiety_loss_factor = 0.006 #M how fast they go hungry, this is multiplied with speed
         self.herbivore_max_satiety = 2 #M
-        self.herbivore_avg_gestation_time = 25 #M
+        self.herbivore_avg_gestation_time = 28 #M
         self.herbivore_gestation_time_std_dev = 5 #M
-        self.herbivore_reproduction_minimum_satiety = 1.0 #M # minimum satiety required to start gestation
-        self.herbivore_reproduction_satiety_loss = 0.5 #M # how much satiety they lose when they reproduce
+        self.herbivore_reproduction_minimum_satiety = 1.1 #M # minimum satiety required to start gestation
+        self.herbivore_reproduction_satiety_loss = 0.6 #M # how much satiety they lose when they reproduce
         self.herbivore_max_percent_satiety_to_eat = 0.75 #M # they wont eat if their satiety is above this percentage
         self.herbivore_FOV = np.pi*1.2 #M
         self.herbivore_vision_range = 170 #M
         self.herbivore_avg_age = 100 # in seconds #M
         self.herbivore_age_std_dev = 7 #M
-        self.herbivore_min_age_to_reproduce = 20 #M # they wont reproduce if they are younger than this
+        self.herbivore_min_age_to_reproduce = 23 #M # they wont reproduce if they are younger than this
         self.herbivore_nutrition_value = 1.0 #how much satiety predators get from eating a herbivore.
+        self.herbivore_top_n = 20
 
         #DO NOT EDIT
         self.plant_positions = np.zeros((self.max_plant,2))
@@ -88,7 +97,6 @@ class World:
         self.alive_plant_array = np.zeros(self.max_plant,dtype=bool)
         self.plant_reproduction_timer_accumulator = 0.0
         self.plant_spawn_time_accumulator = 0
-
 
         self.herbivore_positions = np.zeros((self.max_herbivore,2))
         self.herbivore_angles = np.zeros((self.max_herbivore,))
@@ -113,11 +121,15 @@ class World:
         self.herbivore_offsping_count = np.zeros((self.max_herbivore,))
         self.herbivore_brains = np.array([[None] * self.max_herbivore])[0]
         self.herbivore_generations = np.zeros((self.max_herbivore,))
-        self.herbivore_fitnesses = np.zeros((self.max_herbivore,))
-        self.herbivore_best_brain = None
-        self.herbivore_current_best_fitness = 0
-        self.herbivore_best_bias = 0
-        self.herbivore_best_generation = 0
+
+        self.herbivore_top_generations = np.zeros((self.herbivore_top_n,)) # stored top generations corresponding to the top fitnesses, start at 0
+        self.herbivore_dist_since_last_meal = np.zeros((self.max_herbivore,)) # for fitness calculations #update spawn
+        self.herbivore_fitnesses = np.zeros((self.max_herbivore,)) # current fitnesses of herbivores
+        self.herbivore_top_fitnesses = np.zeros((self.herbivore_top_n,)) # stored top fitnesses, start at 0
+        self.herbivore_top_brains = np.array([[None] * self.herbivore_top_n])[0] # stored top brains corresponding to the top fitnesses, start at None
+        self.herbivore_top_colours = np.zeros((self.herbivore_top_n,3)) # stored top colours corresponding to the top fitnesses, start at 0
+        self.herbivore_resurrection_count = 75 #MA 
+        self.herbivore_resurrection_random_count = 50 #MA 
 
         self.predator_positions = np.zeros((self.max_predator,2))
         self.predator_angles = np.zeros((self.max_predator,))
@@ -147,8 +159,9 @@ class World:
     
     def recalculate_dependent_attributes(self):
         #this is called when the world is restarted after new settings are applied
-        self.plant_random_spawn_interval = 4 / self.plant_regrowth_power 
-        self.plant_reproduction_interval = 10 / self.plant_regrowth_power 
+        #remember to update
+        self.plant_random_spawn_interval = 1 / self.plant_regrowth_power 
+        self.plant_reproduction_interval = 15 / self.plant_regrowth_power 
         self.plant_positions = np.zeros((self.max_plant,2))
         self.plant_reproduction_timers = np.zeros((self.max_plant,))
         self.alive_plant_array = np.zeros(self.max_plant,dtype=bool)
@@ -401,7 +414,7 @@ class World:
     def spawn_random_plants(self,dt):
         self.plant_spawn_time_accumulator += dt * self.world_speed_multiplier
         if (self.plant_spawn_time_accumulator > self.plant_random_spawn_interval):
-            self.spawn_food(1)
+            self.spawn_food(np.random.randint(1, 3)) # spawn a random number of plants between 1 and 2
             self.plant_spawn_time_accumulator -= self.plant_random_spawn_interval
     
     def plants_reproduce(self, dt):
@@ -484,7 +497,7 @@ class World:
 ################## ----------------------------------- HEBIVORES ----------------------------------------------- ####################
 ################## ----------------------------------- HEBIVORES ----------------------------------------------- ####################
     def update_herbivores(self,dt): # master function that includes all the rest
-        self.herbivores_increment_fitness(dt)
+        self.herbivores_check_resurrect(dt)
         self.herbivores_die_of_natural_causes(dt) 
         self.herbivores_perceive() # calculate neural network inputs
         self.herbivores_process_NN(dt) # push neural network inputs to the NNs, get movement parameters out
@@ -492,19 +505,36 @@ class World:
         self.check_herbivore_plant_collisions() # check if they collided with food
         self.herbivores_reproduce(dt) # check if they reproduce 
     
-    def herbivores_increment_fitness(self,dt):
-        return
-        #self.herbivore_fitnesses[self.alive_herbivore_array] += 0.05* (self.herbivore_satiety[self.alive_herbivore_array]/self.herbivore_max_satiety) * dt * self.world_speed_multiplier * (1/max(self.current_plant, 0.01)) * (1+0.5*self.current_predator/self.max_predator)
+    def herbivores_check_resurrect(self, dt):
+        if np.sum(self.alive_herbivore_array) == 0:
+            self.resurrection_delay_counter += dt * self.world_speed_multiplier
+            if self.resurrection_delay_counter > 15.0: # wait for plants to regrow
+                self.resurrect_herbivores(self.herbivore_resurrection_count, self.herbivore_resurrection_random_count)
+                self.resurrection_delay_counter = 0.0
 
     def herbivores_die_of_natural_causes(self, dt):
         #check is anyone starved
-        self.herbivore_satiety[self.alive_herbivore_array] -= (self.herbivore_satiety_loss_factor * 6.5 * abs(self.herbivore_speeds[self.alive_herbivore_array]/self.max_speed) + 2.5 * self.herbivore_satiety_loss_factor) * dt * self.world_speed_multiplier
+        self.herbivore_satiety[self.alive_herbivore_array] -= (self.herbivore_satiety_loss_factor * 3 * abs(self.herbivore_speeds[self.alive_herbivore_array]/self.max_speed) + 5 * self.herbivore_satiety_loss_factor) * dt * self.world_speed_multiplier
+        died_starvation = self.alive_herbivore_array & (self.herbivore_satiety <= 0)
         self.alive_herbivore_array &= (self.herbivore_satiety > 0)
 
         #check if anyone died of old age
         self.herbivore_ages[self.alive_herbivore_array] += dt * self.world_speed_multiplier
+        died_age = self.alive_herbivore_array & (self.herbivore_ages >= self.herbivore_life_expectancy)
         self.alive_herbivore_array &= (self.herbivore_ages < self.herbivore_life_expectancy)
-        
+
+        died_indices = np.where(died_starvation | died_age)[0]
+        # Update top brains archive
+        for idx in died_indices:
+            brain = self.herbivore_brains[idx]
+            fitness = self.herbivore_fitnesses[idx]
+            min_top_idx = np.argmin(self.herbivore_top_fitnesses)
+            if fitness > self.herbivore_top_fitnesses[min_top_idx]:
+                self.herbivore_top_fitnesses[min_top_idx] = fitness
+                self.herbivore_top_brains[min_top_idx] = copy.deepcopy(brain)
+                self.herbivore_top_generations[min_top_idx] = self.herbivore_generations[idx]
+                self.herbivore_top_colours[min_top_idx] = self.herbivore_colours[idx]
+
         if self.selected_herbivore_index != None:
             if self.alive_herbivore_array[self.selected_herbivore_index] == False:
                 #check if selected herbivore died
@@ -593,6 +623,9 @@ class World:
         self.herbivore_positions[:, 0] %= self.world_width
         self.herbivore_positions[:, 1] %= self.world_height
 
+        #calculate travelled distance for fitness calcs:
+        self.herbivore_dist_since_last_meal[self.alive_herbivore_array] += np.linalg.norm(dpos, axis=1)
+
 
     def check_herbivore_plant_collisions(self):
         if not np.any(self.alive_herbivore_array) or not np.any(self.alive_plant_array):
@@ -626,10 +659,13 @@ class World:
         # Feed herbivores
         self.herbivore_satiety[herbivores_that_ate_indices] += self.plant_nutrition_value
         np.clip(self.herbivore_satiety, -1, self.herbivore_max_satiety, out=self.herbivore_satiety)
+        # update fitness of herbivores that ate
+        # fitness += 1 + distance_to_nearest_food_when_food_was_found * 0.02 (so that animals that find food from farther away get more fitness, to encourage exploration)
+        self.herbivore_fitnesses[herbivores_that_ate_indices] += (1 + self.herbivore_dist_since_last_meal[herbivores_that_ate_indices] * self.fitness_distance_multiplier)
+        self.herbivore_dist_since_last_meal[herbivores_that_ate_indices] = 0.0
 
         # Mark plants as dead
         self.alive_plant_array[plants_that_were_eaten_indices] = False
-        #self.current_plant -= plants_that_were_eaten_indices.size
     
     def herbivores_reproduce(self,dt):
         sated_herbivore_indices = np.where((self.alive_herbivore_array) & 
@@ -730,35 +766,49 @@ class World:
                     self.herbivore_gestation_time_reqs[parent_index] = np.random.normal(loc=self.herbivore_avg_gestation_time, scale=self.herbivore_gestation_time_std_dev, size=spawn_count)[0]
                     self.herbivore_satiety[parent_index] -= self.herbivore_reproduction_satiety_loss
 
-    def resurrect_herbivores(self, spawn_count):
+    def resurrect_herbivores(self, spawn_count, spawn_count_random):
+        total_top_fitness = np.sum(self.herbivore_top_fitnesses)
+        if total_top_fitness == 0:
+            #they all died before a single one of them eating food?
             return
-            # outdated
+        relative_fitnesses = self.herbivore_top_fitnesses / total_top_fitness
+        #this will be used as a probability of spawning a new herbivore:
+        free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
 
-            free_indeces = self.get_free_indices(self.alive_herbivore_array,spawn_count)
-
-            new_positions = np.random.randint(low=[1,1], 
+        new_positions = np.random.randint(low=[1,1], 
                                                 high=[self.world_width-1,self.world_height-1],
                                                 size=(spawn_count,2))
-            new_angles = np.random.uniform(low=-np.pi, 
+        new_angles = np.random.uniform(low=-np.pi, 
                                                 high=np.pi,
                                                 size=spawn_count)
-            self.herbivore_positions[free_indeces] = new_positions
-            self.herbivore_angles[free_indeces] = new_angles
-            self.herbivore_speeds[free_indeces] = 0
-            self.herbivore_angular_velocities[free_indeces] = 0
-            self.herbivore_reproduction_timers[free_indeces] = 0.0
-            self.herbivore_ages[free_indeces] = 5
-            self.herbivore_offsping_count[free_indeces] = 0.0
-            self.herbivore_satiety[free_indeces] = 1                
-            self.herbivore_fitnesses[free_indeces] = 0
-            self.alive_herbivore_array[free_indeces] = True
-            #self.herbivore_nn_inputs[free_indeces,self.herbivore_num_of_raysections*2+1] = np.clip(self.herbivore_best_bias + np.random.uniform(low=-self.global_mutation_strength,high=self.global_mutation_strength,size=1),-1,1)
-            self.herbivore_generations[free_indeces] = self.herbivore_best_generation+1
-            for idx in free_indeces:
-                new_brain = copy.deepcopy(self.herbivore_best_brain)
-                new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
-                self.herbivore_brains[idx] = new_brain
-            self.current_predator = spawn_count
+        self.herbivore_positions[free_indeces] = new_positions
+        self.herbivore_angles[free_indeces] = new_angles
+        self.herbivore_speeds[free_indeces] = 0
+        self.herbivore_angular_velocities[free_indeces] = 0
+        self.herbivore_reproduction_timers[free_indeces] = 0.0
+        self.herbivore_ages[free_indeces] = 0
+        self.herbivore_offsping_count[free_indeces] = 0.0
+        self.herbivore_satiety[free_indeces] = 1                
+        self.herbivore_fitnesses[free_indeces] = 0
+        self.alive_herbivore_array[free_indeces] = True
+
+        #stuff that will depend on the fitness of the top brains: generation number, brain, colour:
+        indices_of_parents = np.random.choice(len(self.herbivore_top_fitnesses), size=spawn_count, p=relative_fitnesses)
+        #this means that if a brain has higher fitness, it is more likely to be chosen as a parent for the new herbivores that are being spawned to replace the ones that died.
+        self.herbivore_generations[free_indeces] = self.herbivore_top_generations[indices_of_parents]+1
+        for i, idx in enumerate(free_indeces):
+            parent_idx = indices_of_parents[i]
+            new_brain = copy.deepcopy(self.herbivore_top_brains[parent_idx])
+            new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+            self.herbivore_brains[idx] = new_brain
+            #calculate new colour based on similarity between parent and child brains:
+            brain_distance = calculate_brain_similarity(self.herbivore_top_brains[parent_idx], new_brain)
+            new_colour = self.herbivore_top_colours[parent_idx] + np.random.normal(0, brain_distance*150, size=3)
+            self.herbivore_colours[idx] = np.clip(new_colour, 0, 255)
+        
+        # then do this for random:
+        free_indeces_random = self.get_free_indices(self.alive_herbivore_array,spawn_count_random)
+        self.spawn_herbivore(spawn_count_random, parent_index=-1)
 
 
 ################ ---------------------------------------------- PREDATORS ----------------------------------------------- ################

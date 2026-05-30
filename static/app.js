@@ -241,7 +241,7 @@ function drawState(state) {
         ctx.fillStyle = '#2f8f3a';
         state.plants.forEach((plant) => {
             ctx.beginPath();
-            ctx.arc(screenX(plant.x), screenY(plant.y), 4, 0, Math.PI * 2);
+            ctx.arc(screenX(plant.x), screenY(plant.y), 5, 0, Math.PI * 2);
             ctx.fill();
         });
     }
@@ -391,6 +391,7 @@ function formatStats(stats) {
         Speed: ${stats.speed.toFixed(2)}<br>
         Satiety: ${stats.satiety.toFixed(2)}<br>
         Generation: ${stats.generation}<br>
+        Fitness: ${stats.fitness.toFixed(3)}<br>
         Offspring: ${stats.offspring_count}<br>
         Reproduction: ${(stats.reproduction_progress * 100).toFixed(0)}%
     `;
