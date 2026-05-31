@@ -9,6 +9,8 @@ const stepButton = document.getElementById('stepButton');
 const saveButton = document.getElementById('saveButton');
 const loadButton = document.getElementById('loadButton');
 const chartCtx = document.getElementById('populationChart').getContext('2d');
+const killButton = document.getElementById('killButton');
+
 
 const populationChart = new Chart(chartCtx, {
     type: 'line',
@@ -834,6 +836,24 @@ loadInput.addEventListener('change', async () => {
     await fetch('/load', { method: 'POST', body: formData });
     location.reload();
 });
+
+killButton.addEventListener('click', debugKillSelectedAnimal)
+async function debugKillSelectedAnimal() {
+    try {
+        const response = await fetch('/debug_kill_selected', {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            console.error('Failed to kill selected animal');
+            return;
+        }
+
+        console.log('Selected animal killed');
+    } catch (err) {
+        console.error('Request failed:', err);
+    }
+}
 
 window.addEventListener('load', async () => {
     try {
