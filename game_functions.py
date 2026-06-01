@@ -300,3 +300,17 @@ def resize_layer_in_animal_brain(
             new_brain.out.bias.data[:] = brain.out.bias.data
 
     return new_brain
+
+def to_json_compatible(obj):
+        # Recursively convert numpy types and arrays to native Python types
+        if isinstance(obj, dict):
+            return {k: to_json_compatible(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [to_json_compatible(v) for v in obj]
+        if isinstance(obj, tuple):
+            return [to_json_compatible(v) for v in obj]
+        if isinstance(obj, np.generic):
+            return obj.item()
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj

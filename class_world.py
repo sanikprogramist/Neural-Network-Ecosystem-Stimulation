@@ -12,9 +12,10 @@ from class_animal_brain_nn import *
 #NOTES:
 # 1. fitness is exploitable but i dont know how to fix it
 # 2. herbivore reproduction timer is going up even though pop is at max - not sure if this is a problem
-# 11. settings missing from settings page
-# 14. start them out with 1 hidden layer, then they can evolve to have more. if they want.
+# 14. start them out with 1 hidden layer, then they can evolve to have more. if they want. More flexibility
 # 15. more graphs
+# 17. some settings between predators and herbivores dont match
+# 18. neural network doesnt load when select animal while paused for first time
 
 class World:
 
@@ -28,20 +29,20 @@ class World:
         self.selected_predator_index = None
         self.world_time = 0
 
-        self.max_speed = 30 #ADD
-        self.max_angular_velocity = 3.5 #ADD
+        self.max_speed = 30 #setting exists
+        self.max_angular_velocity = 3.5 #setting exists
 
         self.global_mutation_rate = 0.035 #setting exists
         self.global_mutation_strength = 0.04 #setting exists
         self.colour_change_strength = 15 
         self.min_hidden_dim_size = 2 # starting bound - they might evolve smaller or larger
         self.max_hidden_dim_size = 5 # starting bound
-        self.weight_std_for_new_neurons = 0.35 #ADD
+        self.weight_std_for_new_neurons = 0.35 #setting exists
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
 
-        self.starting_herbivore = 100 #ADD
-        self.starting_predator = 20 #ADD
-        self.starting_plant = 100 #ADD
+        self.starting_herbivore = 100 #setting exists
+        self.starting_predator = 20 #setting exists
+        self.starting_plant = 100 #setting exists
 
         #plants
         self.max_plant = 300 #setting exists
@@ -52,20 +53,20 @@ class World:
         self.plant_reproduction_interval = 15 / self.plant_regrowth_power #5.5 originally
 
         #predators # we dont add predator settings rn because their mechanics are very outdated
-        self.max_predator = 1000 #ADD
+        self.max_predator = 1000 #setting exists
         self.predator_size = 5 
         self.predator_satiety_loss_factor = 0.005 
         self.predator_max_satiety = 2 
-        self.predator_avg_gestation_time = 32 #ADD
-        self.predator_gestation_time_std_dev = 5 #ADD
-        self.predator_reproduction_minimum_satiety = 1.0 #ADD
-        self.predator_reproduction_satiety_loss = 0.4 #ADD
-        self.predator_max_percent_satiety_to_eat = 0.75 #ADD # they wont eat if their satiety is above this percentage
-        self.predator_FOV = np.pi/3 #ADD
-        self.predator_vision_range = 220 #ADD
-        self.predator_avg_age = 120 #ADD
-        self.predator_age_std_dev = 7 #ADD
-        self.predator_min_age_to_reproduce = 24 #ADD
+        self.predator_avg_gestation_time = 32 #setting exists
+        self.predator_gestation_time_std_dev = 5 #setting exists
+        self.predator_reproduction_minimum_satiety = 1.0 #setting exists
+        self.predator_reproduction_satiety_loss = 0.4 #setting exists
+        self.predator_max_percent_satiety_to_eat = 0.75 #setting exists # they wont eat if their satiety is above this percentage
+        self.predator_FOV = np.pi/3 #setting exists
+        self.predator_vision_range = 220 #setting exists
+        self.predator_avg_age = 120 #setting exists
+        self.predator_age_std_dev = 7 #setting exists
+        self.predator_min_age_to_reproduce = 24 #setting exists
         
 
         #herbivores
@@ -83,7 +84,7 @@ class World:
         self.herbivore_avg_age = 100 #setting exists
         self.herbivore_age_std_dev = 7 #setting exists
         self.herbivore_min_age_to_reproduce = 23 #setting exists # they wont reproduce if they are younger than this
-        self.herbivore_nutrition_value = 1.0 #ADD #how much satiety predators get from eating a herbivore.
+        self.herbivore_nutrition_value = 1.0 #setting exists #how much satiety predators get from eating a herbivore.
 
         #DO NOT EDIT
         self.plant_positions = np.zeros((self.max_plant,2))
@@ -143,10 +144,10 @@ class World:
         self.predator_dist_since_last_meal = np.zeros((self.max_predator,)) # for fitness calculations #update spawn
         self.predator_fitnesses = np.zeros((self.max_predator,))
         
-         #RESURRECTION:
-        self.herbivore_resurrection_count = 40 #ADD  #resurrect from fitness archive
-        self.herbivore_resurrection_random_count = 40 #ADD #resurrect from most recent animal archive
-        self.herbivore_resurrection_recent_count = 40 #ADD resurrectt random
+        #RESURRECTION:
+        self.herbivore_resurrection_count = 40 #setting exists  #resurrect from fitness archive
+        self.herbivore_resurrection_random_count = 40 #setting exists #resurrect from most recent animal archive
+        self.herbivore_resurrection_recent_count = 40 #setting exists resurrectt random
         self.herbivore_new_archive_size = 100
         self.herbivore_top_n = 20
         self.herbivore_resurrect_after_plants_reach = 200
@@ -163,12 +164,12 @@ class World:
         self.herbivore_resurrection_delay_counter = 0
         self.start_resurrecting_herbivores = False 
 
-        self.predator_resurrection_count = 15 #ADD
-        self.predator_resurrection_recent_count = 15 #ADD
-        self.predator_resurrection_random_count = 15 #ADD       
+        self.predator_resurrection_count = 15 #setting exists
+        self.predator_resurrection_recent_count = 15 #setting exists
+        self.predator_resurrection_random_count = 15 #setting exists       
         self.predator_new_archive_size = 100 #this will store most recent animals
         self.predator_top_n = 20
-        self.predators_resurrect_after_herbivores_reach = 140 #ADD
+        self.predators_resurrect_after_herbivores_reach = 140 #setting exists
         self.predator_top_fitnesses = np.zeros((self.predator_top_n,)) # stored top fitnesses, start at 0
         self.predator_top_brains = np.array([[None] * self.predator_top_n])[0] # stored top brains corresponding to the top fitnesses, start at None
         self.predator_top_colours = np.zeros((self.predator_top_n,3)) # stored top colours corresponding to the top fitnesses, start at 0
@@ -182,12 +183,8 @@ class World:
         self.predator_resurrection_delay_counter = 0  
         self.start_resurrecting_predators = False 
 
-
-        
-    
     def recalculate_dependent_attributes(self):
         #this is called when the world is restarted after new settings are applied
-        #remember to update
         self.plant_random_spawn_interval = 1 / self.plant_regrowth_power 
         self.plant_reproduction_interval = 15 / self.plant_regrowth_power 
         self.plant_positions = np.zeros((self.max_plant,2))
@@ -211,6 +208,26 @@ class World:
         self.herbivore_brains = np.array([[None] * self.max_herbivore])[0]
         self.herbivore_generations = np.zeros((self.max_herbivore,))
         self.herbivore_fitnesses = np.zeros((self.max_herbivore,))
+        self.herbivore_random_spawn_mask = np.zeros((self.max_herbivore,))
+
+        self.predator_positions = np.zeros((self.max_predator,2))
+        self.predator_angles = np.zeros((self.max_predator,))
+        self.predator_speeds = np.zeros((self.max_predator,))
+        self.predator_angular_velocities = np.zeros((self.max_predator,))
+        self.predator_colours = np.zeros((self.max_predator,3))
+        self.predator_satiety = np.zeros((self.max_predator,))
+        self.predator_life_expectancy = np.zeros((self.max_predator,))
+        self.alive_predator_array = np.zeros(self.max_predator,dtype=bool)
+        self.predator_nn_inputs = np.zeros((self.max_predator, (self.predator_num_external_infos + self.predator_self_infos)),dtype=np.float32)
+        self.predator_reproduction_timers = np.zeros((self.max_predator,))
+        self.predator_gestation_time_reqs = np.zeros((self.max_predator,))
+        self.predator_ages = np.zeros((self.max_predator,))
+        self.predator_offsping_count = np.zeros((self.max_predator,))
+        self.predator_brains = np.array([[None] * self.max_predator])[0]
+        self.predator_generations = np.zeros((self.max_predator,))
+        self.predator_dist_since_last_meal = np.zeros((self.max_predator,)) # for fitness calculations #update spawn
+        self.predator_fitnesses = np.zeros((self.max_predator,))
+        self.predator_random_spawn_mask = np.zeros((self.max_predator,))
 
     def update(self,dt): # super master function which updates the state of the world
         self.update_plants(dt)
@@ -221,33 +238,9 @@ class World:
     def get_free_indices(self, mask, slots_needed): # utility function
         free_indices = np.where(mask == False)[0][0:slots_needed]
         return free_indices
-    
-    def get_best_brain(self):
-        return
-        
-    def _serialize_position(self, position):
-        return [float(position[0]), float(position[1])]
-
-    def _serialize_scalar(self, value):
-        if isinstance(value, np.generic):
-            return value.item()
-        return value
-
-    def _to_json_compatible(self, obj):
-        # Recursively convert numpy types and arrays to native Python types
-        if isinstance(obj, dict):
-            return {k: self._to_json_compatible(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [self._to_json_compatible(v) for v in obj]
-        if isinstance(obj, tuple):
-            return [self._to_json_compatible(v) for v in obj]
-        if isinstance(obj, np.generic):
-            return obj.item()
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return obj
 
     def get_simulation_state(self):
+        #main api endpoint
         plant_indices = np.where(self.alive_plant_array)[0]
         herbivore_indices = np.where(self.alive_herbivore_array)[0]
         predator_indices = np.where(self.alive_predator_array)[0]
@@ -296,7 +289,7 @@ class World:
         selected = None
         if self.selected_herbivore_index is not None and self.alive_herbivore_array[self.selected_herbivore_index]:
             brain = self.herbivore_brains[self.selected_herbivore_index]
-            weights = self._to_json_compatible(brain.get_network_weights())
+            weights = to_json_compatible(brain.get_network_weights())
             selected = {
                 "species": "herbivore",
                 "id": int(self.selected_herbivore_index),
@@ -323,7 +316,7 @@ class World:
             }
         elif self.selected_predator_index is not None and self.alive_predator_array[self.selected_predator_index]:
             brain = self.predator_brains[self.selected_predator_index]
-            weights = self._to_json_compatible(brain.get_network_weights())
+            weights = to_json_compatible(brain.get_network_weights())
             selected = {
                 "species": "predator",
                 "id": int(self.selected_predator_index),
@@ -552,7 +545,7 @@ class World:
         self.herbivore_nn_inputs[alive_indices,0:self.herbivore_num_external_infos] = output_from_perception_function
         self.herbivore_nn_inputs[alive_indices,self.herbivore_num_external_infos:self.herbivore_num_external_infos+2] = np.stack((1-(self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety), self.herbivore_speeds[alive_indices] / self.max_speed), axis=1)
 
-    def herbivores_process_NN(self, dt):
+    def herbivores_process_NN(self, dt, just_getting_stats_for_NN_visualisation = False):
         alive_indices = np.where(self.alive_herbivore_array)[0]
         if alive_indices.size == 0:
             return
@@ -582,13 +575,15 @@ class World:
                     output = brain(input_tensor[i].unsqueeze(0), return_activations=False).numpy()[0]
             outputs.append(output)
 
+        if just_getting_stats_for_NN_visualisation: return
+
         outputs = np.array(outputs, dtype=np.float32)  # shape (N_alive, 2)
 
         # === assign outputs ===
-         #First output is the speed
+        #First output is the speed
         #if this was a cleaner codebase, this would go in herbivores_move
         #output 0 means no speed. 1 means max speed forward. -1 means back up.
-        self.herbivore_speeds[alive_indices] = outputs[:, 0] * self.max_speed #* self.world_speed_multiplier * dt
+        self.herbivore_speeds[alive_indices] = outputs[:, 0] * self.max_speed 
 
         #second output is directly assigned to angular velocity array after scaling:
         self.herbivore_angular_velocities[alive_indices] = outputs[:, 1] * self.max_angular_velocity * self.world_speed_multiplier * dt
@@ -950,7 +945,7 @@ class World:
         self.predator_nn_inputs[alive_indices,0:self.predator_num_external_infos] = output_from_perception_function
         self.predator_nn_inputs[alive_indices,self.predator_num_external_infos:self.predator_num_external_infos+2] = np.stack((1-(self.predator_satiety[alive_indices] / self.predator_max_satiety), self.predator_speeds[alive_indices] / self.max_speed), axis=1)
 
-    def predators_process_NN(self, dt):
+    def predators_process_NN(self, dt, just_getting_stats_for_NN_visualisation = False):
         alive_indices = np.where(self.alive_predator_array)[0]
         if alive_indices.size == 0:
             return
@@ -980,13 +975,15 @@ class World:
                     output = brain(input_tensor[i].unsqueeze(0), return_activations=False).numpy()[0]
             outputs.append(output)
 
+        if just_getting_stats_for_NN_visualisation == True : return
+
         outputs = np.array(outputs, dtype=np.float32)  # shape (N_alive, 2)
 
         # === assign outputs ===
-         #First output is the speed
+        #First output is the speed
         #if this was a cleaner codebase, this would go in predators_move
         #output 0 means no speed. 1 means max speed forward. -1 means back up.
-        self.predator_speeds[alive_indices] = outputs[:, 0] * self.max_speed #* self.world_speed_multiplier * dt
+        self.predator_speeds[alive_indices] = outputs[:, 0] * self.max_speed 
 
         #second output is directly assigned to angular velocity array after scaling:
         self.predator_angular_velocities[alive_indices] = outputs[:, 1] * self.max_angular_velocity * self.world_speed_multiplier * dt

@@ -255,33 +255,17 @@ def select_animal(data: dict):
     if species == "herbivore":
         world.selected_herbivore_index = animal_id
         world.selected_predator_index = None
+        
     elif species == "predator":
         world.selected_predator_index = animal_id
-        world.selected_herbivore_index = None        
+        world.selected_herbivore_index = None
+
     else:
         world.selected_herbivore_index = None
         world.selected_predator_index = None
-        
+    
     return {"success": True}
 
-
-@app.post("/select_animal")
-def select_animal(data: dict):
-    #this is the frontend click selection sending a message to the backend to set the selected animal index
-    species = data.get("species")
-    animal_id = data.get("id")
-
-    if species == "herbivore":
-        world.selected_herbivore_index = animal_id
-        world.selected_predator_index = None
-    elif species == "predator":
-        world.selected_predator_index = animal_id
-        world.selected_herbivore_index = None        
-    else:
-        world.selected_herbivore_index = None
-        world.selected_predator_index = None
-        
-    return {"success": True}
 
 @app.post("/debug_kill_selected")
 def kill_selected_animal():

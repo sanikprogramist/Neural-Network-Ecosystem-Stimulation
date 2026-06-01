@@ -11,10 +11,11 @@ const loadButton = document.getElementById('loadButton');
 const chartCtx = document.getElementById('populationChart').getContext('2d');
 const killButton = document.getElementById('killButton');
 
-let running = true;
+let running = false;
 let lastState = null;
 let lastTickTime = performance.now();
 let neuralNetPulsesEnabled = true;
+let chartInterval = null;
 
 //charts
 const populationChart = new Chart(chartCtx, {
@@ -399,12 +400,7 @@ let chart_last_time = -1;
 
 async function updateChart() {
     try {
-        const data = await fetchChartData();
-        if (data.world_time <= chart_last_time) {
-            return; // simulation is paused and world time is the same.
-        }
         populationChart.data.labels.push(data.world_time.toFixed(1));
-
         populationChart.data.datasets[0].data.push(data.current_plant);
         populationChart.data.datasets[1].data.push(data.current_herbivore);
         populationChart.data.datasets[2].data.push(data.current_predator);
@@ -480,8 +476,7 @@ function drawLiveNeuralNetwork(nn) {
         return;
     }
 
-    // --- FIX: Dynamic resolution synchronization ---
-    // If the CSS size doesn't match the rendering bitmap size, sync them instantly
+    // --- Dynamic resolution synchronization ---
     if (networkCanvas.width !== networkCanvas.clientWidth || networkCanvas.height !== networkCanvas.clientHeight) {
         networkCanvas.width = networkCanvas.clientWidth;
         networkCanvas.height = networkCanvas.clientHeight;
@@ -490,7 +485,19 @@ function drawLiveNeuralNetwork(nn) {
     const w = networkCanvas.width;
     const h = networkCanvas.height;
     
-    // Adjusted padding to protect labels from clipping at taller aspect ratios
+    // Exit early if the network structure is invalid
+    if (!nn.inputs || !nn.hidden_dim_1 || !nn.hidden_dim_2 || !nn.output) {
+        console.log(nn)
+        networkCtx.clearRect(0, 0, w, h);
+        networkCtx.fillStyle = '#f5f7fb';
+        networkCtx.fillRect(0, 0, w, h);
+        networkCtx.fillStyle = '#111827';
+        networkCtx.font = '14px sans-serif';
+        networkCtx.textAlign = 'center';
+        networkCtx.fillText('Initializing neural network...', w/2, h/2);
+        return;
+    }
+    
     const padding = 30; 
     const nodeRadius = 6;
     const t = performance.now() / 1000;
@@ -506,6 +513,7 @@ function drawLiveNeuralNetwork(nn) {
         { values: nn.output,       x: w - 60 },
     ];
 
+    // Validate weight matrices exist and match expected structure
     const weightMatrices = nn.weights ? [
         nn.weights.input_to_hidden1,
         nn.weights.hidden1_to_hidden2,
@@ -514,7 +522,9 @@ function drawLiveNeuralNetwork(nn) {
 
     const getY = (layerIndex, i) => {
         const layer = layers[layerIndex];
-        // Adjusted to leave extra space at the bottom for the labels
+        if (!layer || !layer.values || layer.values.length === 0) {
+            return padding; // fallback position
+        }
         const spacing = (h - (padding * 2.5)) / Math.max(layer.values.length - 1, 1);
         return padding + i * spacing;
     };
@@ -523,6 +533,10 @@ function drawLiveNeuralNetwork(nn) {
     for (let l = 0; l < layers.length - 1; l++) {
         const from = layers[l];
         const to   = layers[l + 1];
+        
+        // Skip if either layer has invalid values
+        if (!from || !to || !from.values || !to.values) continue;
+        if (from.values.length === 0 || to.values.length === 0) continue;
 
         for (let i = 0; i < from.values.length; i++) {
             for (let j = 0; j < to.values.length; j++) {
@@ -537,10 +551,12 @@ function drawLiveNeuralNetwork(nn) {
                 let signal    = 0;
                 let absSignal = 0;
 
-                if (weightMatrices && weightMatrices[l]) {
-                    const weight = weightMatrices[l][j]?.[i];
-                    if (weight !== undefined) {
-                        signal    = weight * from.values[i];
+                // Safely check weight matrices
+                if (weightMatrices && weightMatrices[l] && weightMatrices[l][j]) {
+                    const weight = weightMatrices[l][j][i];
+                    if (weight !== undefined && weight !== null) {
+                        const fromValue = from.values[i] !== undefined ? from.values[i] : 0;
+                        signal    = weight * fromValue;
                         absSignal = Math.abs(signal);
 
                         edgeWidth = 0.5 + Math.min(absSignal, 1.0) * 3.5;
@@ -597,8 +613,10 @@ function drawLiveNeuralNetwork(nn) {
     // --- Draw nodes ---
     for (let l = 0; l < layers.length; l++) {
         const layer = layers[l];
+        if (!layer || !layer.values) continue;
+        
         for (let i = 0; i < layer.values.length; i++) {
-            const v     = layer.values[i];
+            const v     = layer.values[i] !== undefined ? layer.values[i] : 0;
             const n     = Math.max(-1, Math.min(1, v));
             const red   = Math.round(Math.max(0, -n) * 255);
             const green = Math.round(Math.max(0, n) * 255);
@@ -625,7 +643,9 @@ function drawLiveNeuralNetwork(nn) {
     networkCtx.font = '12px sans-serif';
     networkCtx.textAlign = 'center';
     ['Input', 'Hidden 1', 'Hidden 2', 'Output'].forEach((label, i) => {
-        networkCtx.fillText(label, layers[i].x, h - 8);
+        if (layers[i]) {
+            networkCtx.fillText(label, layers[i].x, h - 8);
+        }
     });
 }
 
@@ -798,8 +818,8 @@ restartSettingsButton.addEventListener('click', async () => {
 
         closeSettings();
     } catch (error) {
-        console.error('Failed to commit configurations via endpoint sequence:', error);
-        alert('Could not update active running simulation profiles.');
+        console.error('Failed to commit settings config:', error);
+        alert('Could not update simulation settings.');
     }
 });
 
@@ -845,9 +865,11 @@ canvas.addEventListener('click', async (event) => {
     console.log('selected species and id:',selection.species, selection.id);
     sendSelection(selection.species, selection.id); // inform backend about selection so it can prepare detailed stats (like NN activations) for this animal
     // Fetch full stats and update panel when ready 
-    const temp_state = await fetchState();
-    updateStatsPanel(formatStats(temp_state.selected));
-    drawState(temp_state);
+    if (!running) {
+        const temp_state = await stepWorld(0.001) //do a tiny step 
+        updateStatsPanel(formatStats(temp_state.selected));
+        drawState(temp_state);
+    }
 });
 
 async function sendSelection(species, id) {
@@ -889,17 +911,16 @@ function startLoop() {
     if (running) return;
 
     running = true;
-
     lastTickTime = performance.now();
-
     toggleButton.textContent = 'Pause';
-
+    startChartUpdates();
     loop();
 }
 
 function stopLoop() {
     running = false;
     toggleButton.textContent = 'Start';
+    stopChartUpdates();
 }
 
 toggleButton.addEventListener('click', () => {
@@ -966,10 +987,29 @@ window.addEventListener('load', async () => {
         lastState = state;
         drawState(state);
         updateStatsPanel('Click a herbivore or predator to view stats.');
-        startLoop();
-        setInterval(updateChart, 3000);
+        //startLoop();
     } catch (error) {
         statusEl.textContent = 'Unable to load simulation state.';
         console.error(error);
     }
 });
+
+function stopChartUpdates() {
+    if (chartInterval) {
+        clearInterval(chartInterval);
+        chartInterval = null;
+        console.log('Chart updates stopped');
+    } else {
+        console.log("Trying to stop chart interval although it is already stopped")
+    }
+}
+
+// To restart it:
+function startChartUpdates() {
+    if (!chartInterval) {
+        chartInterval = setInterval(updateChart, 3000);
+        console.log('Chart updates started');
+    } else {
+        console.log("Trying to start chart interval although it is already running")
+    }
+}
