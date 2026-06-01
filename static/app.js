@@ -11,7 +11,12 @@ const loadButton = document.getElementById('loadButton');
 const chartCtx = document.getElementById('populationChart').getContext('2d');
 const killButton = document.getElementById('killButton');
 
+let running = true;
+let lastState = null;
+let lastTickTime = performance.now();
+let neuralNetPulsesEnabled = true;
 
+//charts
 const populationChart = new Chart(chartCtx, {
     type: 'line',
     data: {
@@ -52,26 +57,47 @@ const populationChart = new Chart(chartCtx, {
     }
 });
 
-let running = true;
-let lastState = null;
-let lastTickTime = performance.now();
-
 // --- DOM ELEMENTS FOR SETTINGS ---
 const simView = document.getElementById('simView');
 const settingsView = document.getElementById('settingsView');
 const settingsButton = document.getElementById('settingsButton');
 const backButton = document.getElementById('backButton');
 const restartSettingsButton = document.getElementById('restartSettingsButton');
-
-
 const inputsConfig = [
-    { input: 'worldSpeedInput', val: 'worldSpeedValue', isFloat: true, fixed: 1 },
+    // Globals Setup
+    { input: 'worldSpeedInput', val: 'worldSpeedValue', isFloat: true, fixed: 2 },
+    { input: 'maxSpeedInput', val: 'maxSpeedValue', isFloat: false },
+    { input: 'maxAngularVelocityInput', val: 'maxAngularVelocityValue', isFloat: true, fixed: 1 },
     { input: 'globalMutationRateInput', val: 'globalMutationRateValue', isFloat: true, fixed: 3 },
     { input: 'globalMutationStrengthInput', val: 'globalMutationStrengthValue', isFloat: true, fixed: 2 },
+    { input: 'weightStdNewNeuronsInput', val: 'weightStdNewNeuronsValue', isFloat: true, fixed: 2 },
+    { input: 'startingHerbivoreInput', val: 'startingHerbivoreValue', isFloat: false },
+    { input: 'startingPredatorInput', val: 'startingPredatorValue', isFloat: false },
+    { input: 'startingPlantInput', val: 'startingPlantValue', isFloat: false },
+    
+    // Plant Params
     { input: 'maxPlantInput', val: 'maxPlantValue', isFloat: false },
-    { input: 'plantSizeInput', val: 'plantSizeValue', isFloat: true, fixed: 1 },
     { input: 'plantNutritionValueInput', val: 'plantNutritionValueValue', isFloat: true, fixed: 2 },
     { input: 'plantRegrowthPowerInput', val: 'plantRegrowthPowerValue', isFloat: true, fixed: 1 },
+    
+    // Predator Settings & Resilience
+    { input: 'maxPredatorInput', val: 'maxPredatorValue', isFloat: false },
+    { input: 'predatorAvgGestationInput', val: 'predatorAvgGestationValue', isFloat: true, fixed: 1 },
+    { input: 'predatorGestationStdInput', val: 'predatorGestationStdValue', isFloat: true, fixed: 1 },
+    { input: 'predatorMinReproductionSatietyInput', val: 'predatorMinReproductionSatietyValue', isFloat: true, fixed: 1 },
+    { input: 'predatorReproductionLossInput', val: 'predatorReproductionLossValue', isFloat: true, fixed: 2 },
+    { input: 'predatorEatPercentThresholdInput', val: 'predatorEatPercentThresholdValue', isFloat: false },
+    { input: 'predatorFOVInput', val: 'predatorFOVValue', isFloat: true, fixed: 2 },
+    { input: 'predatorVisionRangeInput', val: 'predatorVisionRangeValue', isFloat: false },
+    { input: 'predatorAvgAgeInput', val: 'predatorAvgAgeValue', isFloat: true, fixed: 1 },
+    { input: 'predatorAgeStdInput', val: 'predatorAgeStdValue', isFloat: true, fixed: 1 },
+    { input: 'predatorMinAgeReproductionInput', val: 'predatorMinAgeReproductionValue', isFloat: true, fixed: 1 },
+    { input: 'predatorsResurrectAfterHerbivoresReachInput', val: 'predatorsResurrectAfterHerbivoresReachValue', isFloat: false },
+    { input: 'predatorResurrectionCountInput', val: 'predatorResurrectionCountValue', isFloat: false },
+    { input: 'predatorResurrectionRecentCountInput', val: 'predatorResurrectionRecentCountValue', isFloat: false },
+    { input: 'predatorResurrectionRandomCountInput', val: 'predatorResurrectionRandomCountValue', isFloat: false },
+    
+    // Herbivore Parameters
     { input: 'maxHerbivoreInput', val: 'maxHerbivoreValue', isFloat: false },
     { input: 'herbivoreSatietyLossInput', val: 'herbivoreSatietyLossValue', isFloat: true, fixed: 3 },
     { input: 'herbivoreMaxSatietyInput', val: 'herbivoreMaxSatietyValue', isFloat: true, fixed: 1 },
@@ -84,8 +110,13 @@ const inputsConfig = [
     { input: 'herbivoreVisionRangeInput', val: 'herbivoreVisionRangeValue', isFloat: false },
     { input: 'herbivoreAvgAgeInput', val: 'herbivoreAvgAgeValue', isFloat: true, fixed: 1 },
     { input: 'herbivoreAgeStdInput', val: 'herbivoreAgeStdValue', isFloat: true, fixed: 1 },
-    { input: 'herbivoreMinAgeReproductionInput', val: 'herbivoreMinAgeReproductionValue', isFloat: true, fixed: 1 }
+    { input: 'herbivoreMinAgeReproductionInput', val: 'herbivoreMinAgeReproductionValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreNutritionValueInput', val: 'herbivoreNutritionValueValue', isFloat: true, fixed: 1 },
+    { input: 'herbivoreResurrectionCountInput', val: 'herbivoreResurrectionCountValue', isFloat: false },
+    { input: 'herbivoreResurrectionRandomCountInput', val: 'herbivoreResurrectionRandomCountValue', isFloat: false },
+    { input: 'herbivoreResurrectionRecentCountInput', val: 'herbivoreResurrectionRecentCountValue', isFloat: false }
 ];
+
 inputsConfig.forEach(cfg => {
     const el = document.getElementById(cfg.input);
     const valEl = document.getElementById(cfg.val);
@@ -152,6 +183,7 @@ function visionVecToCanvas(normDist, normAngle, heading, visionRange, halfFov, s
  * @param {number} scaleX  - world-to-canvas x scale
  * @param {number} scaleY  - world-to-canvas y scale
  */
+
 function drawVisionOverlay(animal, scaleX, scaleY) {
     const data = animal.nn_distances_angles;
  
@@ -178,11 +210,23 @@ function drawVisionOverlay(animal, scaleX, scaleY) {
     ctx.stroke();
  
     // ── 2. Detection lines ────────────────────────────────────────────────────
-    const targets = [
-        { normDist: data[0], normAngle: data[1], color: '#3ecf60', label: 'food'       },
-        { normDist: data[2], normAngle: data[3], color: '#5a9ff5', label: 'conspecific'  },
-        { normDist: data[4], normAngle: data[5], color: '#e84545', label: 'predator'     },
-    ];
+    let targets;
+    
+    if (animal.species === 'herbivore') {
+        // Herbivores: see plants (food), herbivores (conspecifics), predators
+        targets = [
+            { normDist: data[0], normAngle: data[1], color: '#3ecf60', label: 'food'       },
+            { normDist: data[2], normAngle: data[3], color: '#5a9ff5', label: 'conspecific'  },
+            { normDist: data[4], normAngle: data[5], color: '#e84545', label: 'predator'     },
+        ];
+    } else if (animal.species === 'predator') {
+        // Predators: see herbivores (food), predators (conspecifics), no predators of predators
+        targets = [
+            { normDist: data[0], normAngle: data[1], color: '#3ecf60', label: 'food'       },  // herbivores as food
+            { normDist: data[2], normAngle: data[3], color: '#5a9ff5', label: 'conspecific'  },  // other predators
+            // No third target for predators since nothing eats them
+        ];
+    }
  
     targets.forEach(({ normDist, normAngle, color }) => {
         if (normDist <= 0.0001) return; // nothing detected for this type
@@ -213,7 +257,6 @@ function drawVisionOverlay(animal, scaleX, scaleY) {
  
     ctx.restore(); // resets globalAlpha and all other state
 }
-
 
 function drawState(state) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -255,8 +298,8 @@ function drawState(state) {
             drawLiveNeuralNetwork(state.selected);
             updateStatsPanel(formatStats(state.selected)); 
         } else if (state.selected.species === 'predator') {
-            console.log('Vision overlay for predators not implemented yet');
-            console.log('Neural Network visualization for predators not implemented yet');
+            drawVisionOverlay(state.selected, scaleX, scaleY);
+            drawLiveNeuralNetwork(state.selected);
             updateStatsPanel(formatStats(state.selected));
         }
     } else {
@@ -386,89 +429,122 @@ async function updateChart() {
 }
 
 function formatStats(stats) {
+    const speciesName = stats.species.charAt(0).toUpperCase() + stats.species.slice(1);
     return `
-        <strong>${stats.species.charAt(0).toUpperCase() + stats.species.slice(1)} #${stats.id}</strong><br>
-        Position: (${stats.x.toFixed(1)}, ${stats.y.toFixed(1)})<br>
-        Age: ${stats.age.toFixed(1)}<br>
-        Speed: ${stats.speed.toFixed(2)}<br>
-        Satiety: ${stats.satiety.toFixed(2)}<br>
-        Generation: ${stats.generation}<br>
-        Fitness: ${stats.fitness.toFixed(3)}<br>
-        Offspring: ${stats.offspring_count}<br>
-        Reproduction: ${(stats.reproduction_progress * 100).toFixed(0)}%
+        <div class="stats-title">${speciesName} #${stats.id} [Gen ${stats.generation}]</div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="label">Position</span>
+                <span class="value">X:${stats.x.toFixed(1)} Y:${stats.y.toFixed(1)}</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Age</span>
+                <span class="value">${stats.age.toFixed(1)}s</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Speed</span>
+                <span class="value">${stats.speed.toFixed(2)}</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Satiety</span>
+                <span class="value">${stats.satiety.toFixed(2)}</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Fitness Rating</span>
+                <span class="value">${stats.fitness.toFixed(3)}</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Total Offspring</span>
+                <span class="value">${stats.offspring_count}</span>
+            </div>
+            <div class="stat-card" style="grid-column: span 2;">
+                <span class="label">Reproduction</span>
+                <span class="value">${(stats.reproduction_progress * 100).toFixed(0)}%</span>
+            </div>
+        </div>
     `;
 }
 
 function updateStatsPanel(message) {
-    statsEl.innerHTML = message;
+    // If it's the raw default text string, wrap it inside our placeholder visual stylings
+    if (message.trim().startsWith("Click a herbivore")) {
+        statsEl.innerHTML = `<div class="empty-stats-msg">${message}</div>`;
+    } else {
+        statsEl.innerHTML = message;
+    }
 }
 
-let neuralNetPulsesEnabled = true;
- 
 function drawLiveNeuralNetwork(nn) {
-    if (!nn || !nn.hidden_dim_1 || !nn.output) {
+    if (!nn) {
         networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
         return;
     }
- 
+
+    // --- FIX: Dynamic resolution synchronization ---
+    // If the CSS size doesn't match the rendering bitmap size, sync them instantly
+    if (networkCanvas.width !== networkCanvas.clientWidth || networkCanvas.height !== networkCanvas.clientHeight) {
+        networkCanvas.width = networkCanvas.clientWidth;
+        networkCanvas.height = networkCanvas.clientHeight;
+    }
+
     const w = networkCanvas.width;
     const h = networkCanvas.height;
-    const padding = 20;
+    
+    // Adjusted padding to protect labels from clipping at taller aspect ratios
+    const padding = 30; 
     const nodeRadius = 6;
     const t = performance.now() / 1000;
- 
+
     networkCtx.clearRect(0, 0, w, h);
     networkCtx.fillStyle = '#f5f7fb';
     networkCtx.fillRect(0, 0, w, h);
- 
+
     const layers = [
         { values: nn.inputs,       x: 60 },
         { values: nn.hidden_dim_1, x: w * 0.33 },
         { values: nn.hidden_dim_2, x: w * 0.66 },
         { values: nn.output,       x: w - 60 },
     ];
- 
+
     const weightMatrices = nn.weights ? [
         nn.weights.input_to_hidden1,
         nn.weights.hidden1_to_hidden2,
         nn.weights.hidden2_to_output,
     ] : null;
- 
+
     const getY = (layerIndex, i) => {
         const layer = layers[layerIndex];
-        const spacing = (h - 2 * padding) / Math.max(layer.values.length - 1, 1);
+        // Adjusted to leave extra space at the bottom for the labels
+        const spacing = (h - (padding * 2.5)) / Math.max(layer.values.length - 1, 1);
         return padding + i * spacing;
     };
- 
+
     // --- Draw connections ---
     for (let l = 0; l < layers.length - 1; l++) {
         const from = layers[l];
         const to   = layers[l + 1];
- 
+
         for (let i = 0; i < from.values.length; i++) {
             for (let j = 0; j < to.values.length; j++) {
- 
+
                 const x1 = from.x;
                 const y1 = getY(l, i);
                 const x2 = to.x;
                 const y2 = getY(l + 1, j);
- 
+
                 let edgeColor = 'rgba(120,120,140,0.12)';
                 let edgeWidth = 0.5;
                 let signal    = 0;
                 let absSignal = 0;
- 
+
                 if (weightMatrices && weightMatrices[l]) {
                     const weight = weightMatrices[l][j]?.[i];
                     if (weight !== undefined) {
-                        // signal = weight * activation of source node
                         signal    = weight * from.values[i];
                         absSignal = Math.abs(signal);
- 
-                        // thickness 0.5..4 with signal strength
+
                         edgeWidth = 0.5 + Math.min(absSignal, 1.0) * 3.5;
- 
-                        // green positive, red negative, alpha fades weak connections
+
                         const alpha = 0.08 + Math.min(absSignal, 1.0) * 0.75;
                         edgeColor = signal > 0
                             ? `rgba(40, 200, 80, ${alpha})`
@@ -477,7 +553,7 @@ function drawLiveNeuralNetwork(nn) {
                                 : `rgba(120, 120, 140, 0.08)`;
                     }
                 }
- 
+
                 // Static edge
                 networkCtx.beginPath();
                 networkCtx.moveTo(x1, y1);
@@ -485,23 +561,22 @@ function drawLiveNeuralNetwork(nn) {
                 networkCtx.strokeStyle = edgeColor;
                 networkCtx.lineWidth   = edgeWidth;
                 networkCtx.stroke();
- 
+
                 // Travelling pulse (optional)
-                if (neuralNetPulsesEnabled && absSignal >= 0.05) {
+                if (typeof neuralNetPulsesEnabled !== 'undefined' && neuralNetPulsesEnabled && absSignal >= 0.05) {
                     const speed       = 0.3 + Math.min(absSignal, 1.0) * 1.2;
                     const phaseOffset = ((l * 97 + i * 31 + j * 13) % 100) / 100;
                     const pulsePos    = (t * speed + phaseOffset) % 1.0;
- 
+
                     const px = x1 + (x2 - x1) * pulsePos;
                     const py = y1 + (y2 - y1) * pulsePos;
- 
+
                     const pulseRadius = 1.5 + Math.min(absSignal, 1.0) * 2.5;
                     const pulseAlpha  = 0.5 + Math.min(absSignal, 1.0) * 0.5;
                     const pulseColor  = signal > 0
                         ? `rgba(80, 240, 120,`
                         : `rgba(255, 80, 80,`;
- 
-                    // Soft glow
+
                     const glow = networkCtx.createRadialGradient(px, py, 0, px, py, pulseRadius * 3);
                     glow.addColorStop(0, `${pulseColor}${pulseAlpha})`);
                     glow.addColorStop(1, `${pulseColor}0)`);
@@ -509,8 +584,7 @@ function drawLiveNeuralNetwork(nn) {
                     networkCtx.arc(px, py, pulseRadius * 3, 0, Math.PI * 2);
                     networkCtx.fillStyle = glow;
                     networkCtx.fill();
- 
-                    // Hard core
+
                     networkCtx.beginPath();
                     networkCtx.arc(px, py, pulseRadius, 0, Math.PI * 2);
                     networkCtx.fillStyle = `${pulseColor}${pulseAlpha})`;
@@ -519,7 +593,7 @@ function drawLiveNeuralNetwork(nn) {
             }
         }
     }
- 
+
     // --- Draw nodes ---
     for (let l = 0; l < layers.length; l++) {
         const layer = layers[l];
@@ -531,13 +605,13 @@ function drawLiveNeuralNetwork(nn) {
             const alpha = 0.3 + Math.abs(n) * 0.7;
             const x     = layer.x;
             const y     = getY(l, i);
- 
+
             // Glow
             networkCtx.beginPath();
             networkCtx.arc(x, y, nodeRadius + Math.abs(n) * 4, 0, Math.PI * 2);
             networkCtx.fillStyle = `rgba(${red},${green},80,${alpha * 0.4})`;
             networkCtx.fill();
- 
+
             // Core
             networkCtx.beginPath();
             networkCtx.arc(x, y, nodeRadius, 0, Math.PI * 2);
@@ -545,18 +619,14 @@ function drawLiveNeuralNetwork(nn) {
             networkCtx.fill();
         }
     }
- 
+
     // --- Labels ---
     networkCtx.fillStyle = '#111827';
-    networkCtx.font = '12px Arial';
+    networkCtx.font = '12px sans-serif';
     networkCtx.textAlign = 'center';
     ['Input', 'Hidden 1', 'Hidden 2', 'Output'].forEach((label, i) => {
-        networkCtx.fillText(label, layers[i].x, h - 5);
+        networkCtx.fillText(label, layers[i].x, h - 8);
     });
-}
-
-function updateStatsPanel(message) {
-    statsEl.innerHTML = message;
 }
 
 // --- VIEW CONTROLLER FUNCTIONS ---
@@ -574,19 +644,37 @@ async function openSettings() {
 async function syncSlidersWithBackend() {
     try {
         const response = await fetch('/settings');
-        if (!response.ok) throw new Error('Could not retrieve ecosystem configurations.');
-        
+        if (!response.ok) throw new Error('Could not pull live configurations from server.');
         const settings = await response.json();
 
-        // Object mapping your configuration key names to backend payload JSON keys
         const dataMap = {
             'worldSpeedInput': settings.world_speed_multiplier,
+            'maxSpeedInput': settings.max_speed,
+            'maxAngularVelocityInput': settings.max_angular_velocity,
             'globalMutationRateInput': settings.global_mutation_rate,
             'globalMutationStrengthInput': settings.global_mutation_strength,
+            'weightStdNewNeuronsInput': settings.weight_std_for_new_neurons,
+            'startingHerbivoreInput': settings.starting_herbivore,
+            'startingPredatorInput': settings.starting_predator,
+            'startingPlantInput': settings.starting_plant,
             'maxPlantInput': settings.max_plant,
-            'plantSizeInput': settings.plant_size,
             'plantNutritionValueInput': settings.plant_nutrition_value,
             'plantRegrowthPowerInput': settings.plant_regrowth_power,
+            'maxPredatorInput': settings.max_predator,
+            'predatorAvgGestationInput': settings.predator_avg_gestation_time,
+            'predatorGestationStdInput': settings.predator_gestation_time_std_dev,
+            'predatorMinReproductionSatietyInput': settings.predator_reproduction_minimum_satiety,
+            'predatorReproductionLossInput': settings.predator_reproduction_satiety_loss,
+            'predatorEatPercentThresholdInput': Math.round(settings.predator_max_percent_satiety_to_eat * 100),
+            'predatorFOVInput': settings.predator_FOV,
+            'predatorVisionRangeInput': settings.predator_vision_range,
+            'predatorAvgAgeInput': settings.predator_avg_age,
+            'predatorAgeStdInput': settings.predator_age_std_dev,
+            'predatorMinAgeReproductionInput': settings.predator_min_age_to_reproduce,
+            'predatorsResurrectAfterHerbivoresReachInput': settings.predators_resurrect_after_herbivores_reach,
+            'predatorResurrectionCountInput': settings.predator_resurrection_count,
+            'predatorResurrectionRecentCountInput': settings.predator_resurrection_recent_count,
+            'predatorResurrectionRandomCountInput': settings.predator_resurrection_random_count,
             'maxHerbivoreInput': settings.max_herbivore,
             'herbivoreSatietyLossInput': settings.herbivore_satiety_loss_factor,
             'herbivoreMaxSatietyInput': settings.herbivore_max_satiety,
@@ -594,36 +682,30 @@ async function syncSlidersWithBackend() {
             'herbivoreGestationStdInput': settings.herbivore_gestation_time_std_dev,
             'herbivoreMinReproductionSatietyInput': settings.herbivore_reproduction_minimum_satiety,
             'herbivoreReproductionLossInput': settings.herbivore_reproduction_satiety_loss,
-            // Multiply ratio (e.g. 0.75) by 100 to sync cleanly back to integer slider scale (75)
             'herbivoreEatPercentThresholdInput': Math.round(settings.herbivore_max_percent_satiety_to_eat * 100),
             'herbivoreFOVInput': settings.herbivore_FOV,
             'herbivoreVisionRangeInput': settings.herbivore_vision_range,
             'herbivoreAvgAgeInput': settings.herbivore_avg_age,
             'herbivoreAgeStdInput': settings.herbivore_age_std_dev,
-            'herbivoreMinAgeReproductionInput': settings.herbivore_min_age_to_reproduce
+            'herbivoreMinAgeReproductionInput': settings.herbivore_min_age_to_reproduce,
+            'herbivoreNutritionValueInput': settings.herbivore_nutrition_value,
+            'herbivoreResurrectionCountInput': settings.herbivore_resurrection_count,
+            'herbivoreResurrectionRandomCountInput': settings.herbivore_resurrection_random_count,
+            'herbivoreResurrectionRecentCountInput': settings.herbivore_resurrection_recent_count
         };
 
-        // Populate values dynamically across your predefined tracking configurations
         inputsConfig.forEach(cfg => {
             const inputEl = document.getElementById(cfg.input);
             const valueEl = document.getElementById(cfg.val);
-            const liveBackendValue = dataMap[cfg.input];
+            const currentVal = dataMap[cfg.input];
 
-            if (inputEl && valueEl && liveBackendValue !== undefined) {
-                // Update the visual handle position
-                inputEl.value = liveBackendValue;
-                
-                // Format the displayed numerical text context correctly
-                if (cfg.isFloat) {
-                    valueEl.textContent = liveBackendValue.toFixed(cfg.fixed);
-                } else {
-                    valueEl.textContent = liveBackendValue;
-                }
+            if (inputEl && valueEl && currentVal !== undefined) {
+                inputEl.value = currentVal;
+                valueEl.textContent = cfg.isFloat ? currentVal.toFixed(cfg.fixed) : currentVal;
             }
         });
-
-    } catch (error) {
-        console.error('Failed to sync settings pane with running simulation:', error);
+    } catch (err) {
+        console.error('Failed to sync settings overlay layout data:', err);
     }
 }
 
@@ -638,20 +720,43 @@ settingsButton.addEventListener('click', openSettings);
 backButton.addEventListener('click', closeSettings);
 
 restartSettingsButton.addEventListener('click', async () => {
-    // Helper function to extract cleanly parsed input DOM data
     const getVal = (id, isFloat) => {
-        const value = document.getElementById(id).value;
-        return isFloat ? parseFloat(value) : parseInt(value, 10);
+        const val = document.getElementById(id).value;
+        return isFloat ? parseFloat(val) : parseInt(val, 10);
     };
 
     const dataToSend = {
         world_speed_multiplier: getVal('worldSpeedInput', true),
+        max_speed: getVal('maxSpeedInput', true),
+        max_angular_velocity: getVal('maxAngularVelocityInput', true),
         global_mutation_rate: getVal('globalMutationRateInput', true),
         global_mutation_strength: getVal('globalMutationStrengthInput', true),
+        weight_std_for_new_neurons: getVal('weightStdNewNeuronsInput', true),
+        starting_herbivore: getVal('startingHerbivoreInput', false),
+        starting_predator: getVal('startingPredatorInput', false),
+        starting_plant: getVal('startingPlantInput', false),
+        
         max_plant: getVal('maxPlantInput', false),
-        plant_size: getVal('plantSizeInput', true),
+        plant_size: 6, // Managed implicitly by index layout
         plant_nutrition_value: getVal('plantNutritionValueInput', true),
         plant_regrowth_power: getVal('plantRegrowthPowerInput', true),
+        
+        max_predator: getVal('maxPredatorInput', false),
+        predator_avg_gestation_time: getVal('predatorAvgGestationInput', true),
+        predator_gestation_time_std_dev: getVal('predatorGestationStdInput', true),
+        predator_reproduction_minimum_satiety: getVal('predatorMinReproductionSatietyInput', true),
+        predator_reproduction_satiety_loss: getVal('predatorReproductionLossInput', true),
+        predator_max_percent_satiety_to_eat: getVal('predatorEatPercentThresholdInput', false) / 100,
+        predator_FOV: getVal('predatorFOVInput', true),
+        predator_vision_range: getVal('predatorVisionRangeInput', false),
+        predator_avg_age: getVal('predatorAvgAgeInput', true),
+        predator_age_std_dev: getVal('predatorAgeStdInput', true),
+        predator_min_age_to_reproduce: getVal('predatorMinAgeReproductionInput', true),
+        predators_resurrect_after_herbivores_reach: getVal('predatorsResurrectAfterHerbivoresReachInput', false),
+        predator_resurrection_count: getVal('predatorResurrectionCountInput', false),
+        predator_resurrection_recent_count: getVal('predatorResurrectionRecentCountInput', false),
+        predator_resurrection_random_count: getVal('predatorResurrectionRandomCountInput', false),
+        
         max_herbivore: getVal('maxHerbivoreInput', false),
         herbivore_satiety_loss_factor: getVal('herbivoreSatietyLossInput', true),
         herbivore_max_satiety: getVal('herbivoreMaxSatietyInput', true),
@@ -659,13 +764,16 @@ restartSettingsButton.addEventListener('click', async () => {
         herbivore_gestation_time_std_dev: getVal('herbivoreGestationStdInput', true),
         herbivore_reproduction_minimum_satiety: getVal('herbivoreMinReproductionSatietyInput', true),
         herbivore_reproduction_satiety_loss: getVal('herbivoreReproductionLossInput', true),
-        // Convert slider percent (e.g. 75) back to float proportion (0.75) for the Python backend
         herbivore_max_percent_satiety_to_eat: getVal('herbivoreEatPercentThresholdInput', false) / 100,
         herbivore_FOV: getVal('herbivoreFOVInput', true),
         herbivore_vision_range: getVal('herbivoreVisionRangeInput', false),
         herbivore_avg_age: getVal('herbivoreAvgAgeInput', true),
         herbivore_age_std_dev: getVal('herbivoreAgeStdInput', true),
-        herbivore_min_age_to_reproduce: getVal('herbivoreMinAgeReproductionInput', true)
+        herbivore_min_age_to_reproduce: getVal('herbivoreMinAgeReproductionInput', true),
+        herbivore_nutrition_value: getVal('herbivoreNutritionValueInput', true),
+        herbivore_resurrection_count: getVal('herbivoreResurrectionCountInput', false),
+        herbivore_resurrection_random_count: getVal('herbivoreResurrectionRandomCountInput', false),
+        herbivore_resurrection_recent_count: getVal('herbivoreResurrectionRecentCountInput', false)
     };
 
     try {
@@ -675,28 +783,25 @@ restartSettingsButton.addEventListener('click', async () => {
             body: JSON.stringify(dataToSend)
         });
 
-        if (!response.ok) {
-            throw new Error(`Failed to restart: ${response.statusText}`);
-        }
-
+        if (!response.ok) throw new Error(`Status error: ${response.statusText}`);
         const result = await response.json();
         console.log(result.message);
 
-        // Reset tracking states for the live population visualization chart
         chart_last_time = -1;
         populationChart.data.labels = [];
-        populationChart.data.datasets.forEach(dataset => dataset.data = []);
+        populationChart.data.datasets.forEach(d => d.data = []);
         populationChart.update();
 
-        // Close overlay pane context and automatically unpause
-        closeSettings();
+        selectedAnimal = null;
+        updateStatsPanel('Click a herbivore or predator to view stats.');
+        networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
 
+        closeSettings();
     } catch (error) {
-        console.error('Error while sending restart configurations:', error);
-        alert('Could not restart simulation with current parameters.');
+        console.error('Failed to commit configurations via endpoint sequence:', error);
+        alert('Could not update active running simulation profiles.');
     }
 });
-
 
 canvas.addEventListener('click', async (event) => {
     if (!lastState) return;

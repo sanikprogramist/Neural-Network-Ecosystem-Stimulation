@@ -10,93 +10,80 @@ from game_functions import *
 from class_animal_brain_nn import *
 
 #NOTES:
-# 1. fitness function doesnt work. As in, the fitness it calculates is meaningless
+# 1. fitness is exploitable but i dont know how to fix it
 # 2. herbivore reproduction timer is going up even though pop is at max - not sure if this is a problem
-# 4. predator preception vision is still old version
-# 5. predator movement is still old
-# 9. predator stats returning reproduction based on old invariable percentage
-# 10. predators still use invariable gestation time and old colour change and static life expectancy and selected predator api endpoint
-# 11. no predator settings in settings page
-# 12. im not sure if spawn things work properly
+# 11. settings missing from settings page
 # 14. start them out with 1 hidden layer, then they can evolve to have more. if they want.
-# 15. no herbivore fitness check when predators eat them
+# 15. more graphs
 
 class World:
 
     def __init__(self):
         # I will mark editable settings with #M
         #globals
-        self.world_speed_multiplier = 1.15 #M
+        self.world_speed_multiplier = 1.15 #setting exists
         self.world_width = 800
         self.world_height = 600
         self.selected_herbivore_index = None
         self.selected_predator_index = None
         self.world_time = 0
 
-        self.max_speed = 30 # max speed
-        self.max_angular_velocity = 3.5 # how fast animals can turn
-        self.max_acceleration = 4.0 # how fast animals can speed up and slow down
+        self.max_speed = 30 #ADD
+        self.max_angular_velocity = 3.5 #ADD
 
-        self.global_mutation_rate = 0.035 #M
-        self.global_mutation_strength = 0.04 #M
-        self.colour_change_strength = 15
+        self.global_mutation_rate = 0.035 #setting exists
+        self.global_mutation_strength = 0.04 #setting exists
+        self.colour_change_strength = 15 
         self.min_hidden_dim_size = 2 # starting bound - they might evolve smaller or larger
         self.max_hidden_dim_size = 5 # starting bound
-        self.weight_std_for_new_neurons = 0.35
+        self.weight_std_for_new_neurons = 0.35 #ADD
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
 
-        self.starting_herbivore = 100 #MA
-        self.starting_predator = 20 #MA
-        self.starting_plant = 100 #MA
+        self.starting_herbivore = 100 #ADD
+        self.starting_predator = 20 #ADD
+        self.starting_plant = 100 #ADD
 
         #plants
-        self.max_plant = 300 #M
-        self.plant_size = 6 #M
-        self.plant_nutrition_value = 0.85 #M
-        self.plant_regrowth_power = 1.0 #M already added
+        self.max_plant = 300 #setting exists
+        self.plant_size = 6 
+        self.plant_nutrition_value = 0.85 #setting exists
+        self.plant_regrowth_power = 1.0 #setting exists
         self.plant_random_spawn_interval = 1 / self.plant_regrowth_power #2.2 originally
         self.plant_reproduction_interval = 15 / self.plant_regrowth_power #5.5 originally
 
         #predators # we dont add predator settings rn because their mechanics are very outdated
-        self.max_predator = 1000 #y
-        self.predator_size = 5 #y
-        self.predator_satiety_loss_factor = 0.005 #y
-        self.predator_max_satiety = 2 #y
-        self.predator_avg_gestation_time = 32 #y
-        self.predator_gestation_time_std_dev = 5 #y
-        self.predator_reproduction_minimum_satiety = 1.0 #y
-        self.predator_reproduction_satiety_loss = 0.4 #y
-        self.predator_max_percent_satiety_to_eat = 0.75 # they wont eat if their satiety is above this percentage
-        self.predator_FOV = np.pi/3 #y
-        self.predator_vision_range = 220 #y
-        self.predator_avg_age = 120 #y
-        self.predator_age_std_dev = 7 #y
-        self.predator_min_age_to_reproduce = 24 #y
-        self.predator_top_n = 20
-        #for ressurecting extinct predators:
-        self.predators_resurrect_after_herbivores_reach = 120
+        self.max_predator = 1000 #ADD
+        self.predator_size = 5 
+        self.predator_satiety_loss_factor = 0.005 
+        self.predator_max_satiety = 2 
+        self.predator_avg_gestation_time = 32 #ADD
+        self.predator_gestation_time_std_dev = 5 #ADD
+        self.predator_reproduction_minimum_satiety = 1.0 #ADD
+        self.predator_reproduction_satiety_loss = 0.4 #ADD
+        self.predator_max_percent_satiety_to_eat = 0.75 #ADD # they wont eat if their satiety is above this percentage
+        self.predator_FOV = np.pi/3 #ADD
+        self.predator_vision_range = 220 #ADD
+        self.predator_avg_age = 120 #ADD
+        self.predator_age_std_dev = 7 #ADD
+        self.predator_min_age_to_reproduce = 24 #ADD
         
 
         #herbivores
-        self.max_herbivore = 2000 #M
+        self.max_herbivore = 2000 #setting exists
         self.herbivore_size = 4
-        self.herbivore_satiety_loss_factor = 0.006 #M how fast they go hungry, this is multiplied with speed
-        self.herbivore_max_satiety = 2 #M
-        self.herbivore_avg_gestation_time = 28 #M
-        self.herbivore_gestation_time_std_dev = 5 #M
-        self.herbivore_reproduction_minimum_satiety = 1.1 #M # minimum satiety required to start gestation
-        self.herbivore_reproduction_satiety_loss = 0.5 #M # how much satiety they lose when they reproduce
-        self.herbivore_max_percent_satiety_to_eat = 0.75 #M # they wont eat if their satiety is above this percentage
-        self.herbivore_FOV = np.pi*1.1 #M
-        self.herbivore_vision_range = 150 #M
-        self.herbivore_avg_age = 100 # in seconds #M
-        self.herbivore_age_std_dev = 7 #M
-        self.herbivore_min_age_to_reproduce = 23 #M # they wont reproduce if they are younger than this
-        self.herbivore_nutrition_value = 1.0 #how much satiety predators get from eating a herbivore.
-        self.herbivore_top_n = 20
-
-        
-
+        self.herbivore_satiety_loss_factor = 0.006 #setting exists how fast they go hungry, this is multiplied with speed
+        self.herbivore_max_satiety = 2 #setting exists
+        self.herbivore_avg_gestation_time = 28 #setting exists
+        self.herbivore_gestation_time_std_dev = 5 #setting exists
+        self.herbivore_reproduction_minimum_satiety = 1.1 #setting exists # minimum satiety required to start gestation
+        self.herbivore_reproduction_satiety_loss = 0.5 #setting exists # how much satiety they lose when they reproduce
+        self.herbivore_max_percent_satiety_to_eat = 0.75 #setting exists # they wont eat if their satiety is above this percentage
+        self.herbivore_FOV = np.pi*1.1 #setting exists
+        self.herbivore_vision_range = 150 #setting exists
+        self.herbivore_avg_age = 100 #setting exists
+        self.herbivore_age_std_dev = 7 #setting exists
+        self.herbivore_min_age_to_reproduce = 23 #setting exists # they wont reproduce if they are younger than this
+        self.herbivore_nutrition_value = 1.0 #ADD #how much satiety predators get from eating a herbivore.
 
         #DO NOT EDIT
         self.plant_positions = np.zeros((self.max_plant,2))
@@ -130,23 +117,6 @@ class World:
         self.herbivore_generations = np.zeros((self.max_herbivore,))
         self.herbivore_dist_since_last_meal = np.zeros((self.max_herbivore,)) # for fitness calculations #update spawn
         self.herbivore_fitnesses = np.zeros((self.max_herbivore,)) # current fitnesses of herbivores
-        self.herbivore_top_generations = np.zeros((self.herbivore_top_n,)) # stored top generations corresponding to the top fitnesses, start at 0
-        self.herbivore_top_fitnesses = np.zeros((self.herbivore_top_n,)) # stored top fitnesses, start at 0
-        self.herbivore_top_brains = np.array([[None] * self.herbivore_top_n])[0] # stored top brains corresponding to the top fitnesses, start at None
-        self.herbivore_top_colours = np.zeros((self.herbivore_top_n,3)) # stored top colours corresponding to the top fitnesses, start at 0
-        self.herbivore_resurrection_count = 40 #MA 
-        self.herbivore_resurrection_random_count = 40 #MA 
-        self.herbivore_resurrection_recent_count = 40
-        self.already_resurrected_herbivores = 0
-        self.herbivore_resurrection_delay_counter = 0
-        self.start_resurrecting_herbivores = False 
-
-        self.herbivore_new_archive_size = 100
-        self.herbivore_new_archive_generations = np.zeros((self.herbivore_new_archive_size,))
-        self.herbivore_new_archive_fitnesses = np.zeros((self.herbivore_new_archive_size,))
-        self.herbivore_new_archive_brains = np.array([[None] * self.herbivore_new_archive_size])[0]
-        self.herbivore_new_archive_colours = np.zeros((self.herbivore_new_archive_size,3))
-        self.herbivore_random_spawn_mask = np.zeros((self.max_herbivore,))
 
         self.predator_positions = np.zeros((self.max_predator,2))
         self.predator_angles = np.zeros((self.max_predator,))
@@ -170,26 +140,48 @@ class World:
         self.predator_offsping_count = np.zeros((self.max_predator,))
         self.predator_brains = np.array([[None] * self.max_predator])[0]
         self.predator_generations = np.zeros((self.max_predator,))
-        self.predator_top_generations = np.zeros((self.predator_top_n,)) # stored top generations corresponding to the top fitnesses, start at 0
         self.predator_dist_since_last_meal = np.zeros((self.max_predator,)) # for fitness calculations #update spawn
         self.predator_fitnesses = np.zeros((self.max_predator,))
+        
+         #RESURRECTION:
+        self.herbivore_resurrection_count = 40 #ADD  #resurrect from fitness archive
+        self.herbivore_resurrection_random_count = 40 #ADD #resurrect from most recent animal archive
+        self.herbivore_resurrection_recent_count = 40 #ADD resurrectt random
+        self.herbivore_new_archive_size = 100
+        self.herbivore_top_n = 20
+        self.herbivore_resurrect_after_plants_reach = 200
+        self.herbivore_top_generations = np.zeros((self.herbivore_top_n,)) # stored top generations corresponding to the top fitnesses, start at 0
+        self.herbivore_top_fitnesses = np.zeros((self.herbivore_top_n,)) # stored top fitnesses, start at 0
+        self.herbivore_top_brains = np.array([[None] * self.herbivore_top_n])[0] # stored top brains corresponding to the top fitnesses, start at None
+        self.herbivore_top_colours = np.zeros((self.herbivore_top_n,3)) # stored top colours corresponding to the top fitnesses, start at 0
+        self.herbivore_new_archive_generations = np.zeros((self.herbivore_new_archive_size,))
+        self.herbivore_new_archive_fitnesses = np.zeros((self.herbivore_new_archive_size,))
+        self.herbivore_new_archive_brains = np.array([[None] * self.herbivore_new_archive_size])[0]
+        self.herbivore_new_archive_colours = np.zeros((self.herbivore_new_archive_size,3))
+        self.herbivore_random_spawn_mask = np.zeros((self.max_herbivore,))
+        self.already_resurrected_herbivores = 0
+        self.herbivore_resurrection_delay_counter = 0
+        self.start_resurrecting_herbivores = False 
+
+        self.predator_resurrection_count = 15 #ADD
+        self.predator_resurrection_recent_count = 15 #ADD
+        self.predator_resurrection_random_count = 15 #ADD       
+        self.predator_new_archive_size = 100 #this will store most recent animals
+        self.predator_top_n = 20
+        self.predators_resurrect_after_herbivores_reach = 140 #ADD
         self.predator_top_fitnesses = np.zeros((self.predator_top_n,)) # stored top fitnesses, start at 0
         self.predator_top_brains = np.array([[None] * self.predator_top_n])[0] # stored top brains corresponding to the top fitnesses, start at None
         self.predator_top_colours = np.zeros((self.predator_top_n,3)) # stored top colours corresponding to the top fitnesses, start at 0
-        self.predator_resurrection_count = 15 #MA 
-        self.predator_resurrection_recent_count = 15
-        self.predator_resurrection_random_count = 15 #MA 
-        self.already_resurrected_predators = 0
-        self.start_resurrecting_predators = False 
-        self.predator_resurrection_delay_counter = 0
-
-        
-        self.predator_new_archive_size = 100 #this will store most recent animals
+        self.predator_top_generations = np.zeros((self.predator_top_n,)) # stored top generations corresponding to the top fitnesses, start at 0
         self.predator_new_archive_generations = np.zeros((self.predator_new_archive_size,))
         self.predator_new_archive_fitnesses = np.zeros((self.predator_new_archive_size,))
         self.predator_new_archive_brains = np.array([[None] * self.predator_new_archive_size])[0]
         self.predator_new_archive_colours = np.zeros((self.predator_new_archive_size,3))
         self.predator_random_spawn_mask = np.zeros((self.max_predator,))
+        self.already_resurrected_predators = 0
+        self.predator_resurrection_delay_counter = 0  
+        self.start_resurrecting_predators = False 
+
 
         
     
@@ -388,7 +380,8 @@ class World:
             self.alive_predator_array[self.selected_predator_index] = False
         else:
             # no animal selected
-            return
+            return False
+        return True
 
 
 ############# -------------------------------------- PLANTS ----------------------------------- ###############   
@@ -493,7 +486,7 @@ class World:
         self.herbivores_reproduce(dt) # check if they reproduce 
     
     def herbivores_check_resurrect(self, dt):
-        if (np.sum(self.alive_herbivore_array) == 0) and (np.sum(self.alive_plant_array) > 200):
+        if (np.sum(self.alive_herbivore_array) == 0) and (np.sum(self.alive_plant_array) > self.herbivore_resurrect_after_plants_reach):
             self.start_resurrecting_herbivores = True
         if not self.start_resurrecting_herbivores:
             return
@@ -893,7 +886,7 @@ class World:
         self.predators_reproduce(dt) # check if they reproduce 
     
     def predators_check_resurrect(self, dt):
-        if (np.sum(self.alive_predator_array) == 0) and (np.sum(self.alive_herbivore_array) > 140):
+        if (np.sum(self.alive_predator_array) == 0) and (np.sum(self.alive_herbivore_array) > self.predators_resurrect_after_herbivores_reach):
             self.start_resurrecting_predators = True
         if not self.start_resurrecting_predators:
             return

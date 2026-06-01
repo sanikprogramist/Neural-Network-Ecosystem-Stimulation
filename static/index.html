@@ -5,89 +5,168 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ecosystem Simulation</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 16px;
-            background: #f5f7fb;
-            color: #20232a;
-        }
+    body {
+        font-family: 'Inter', sans-serif !important;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef5ff 100%) !important;
+        padding: 24px !important;
+        margin: 0;
+    }
 
-        h1 {
-            font-size: 22px;
-            margin-bottom: 10px;
-        }
+    h1 {
+        font-size: 30px !important;
+        font-weight: 700 !important;
+        margin-bottom: 18px !important;
+        color: #1e293b;
+    }
 
-        #controls {
-            margin-bottom: 12px;
-        }
+    #controls {
+        background: white;
+        padding: 16px;
+        border-radius: 16px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        margin-bottom: 20px !important;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
 
-        button {
-            margin-right: 8px;
-            padding: 8px 14px;
-            border: 1px solid #888;
-            border-radius: 4px;
-            background: #fff;
-            cursor: pointer;
-        }
+    button {
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 10px 18px !important;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all .2s ease;
+        cursor: pointer;
+        background: #3b82f6;
+        color: white;
+    }
 
-        button:hover {
-            background: #f0f0f0;
-        }
+    button:hover {
+        transform: translateY(-2px);
+        filter: brightness(0.95);
+    }
 
-        #status {
-            margin-top: 10px;
-            font-size: 14px;
-        }
+    #toggleButton { background: #10b981; }
+    #stepButton { background: #6366f1; }
+    #saveButton, #loadButton { background: #64748b; }
+    #settingsButton { background: #f59e0b; }
 
-        #simCanvas {
-            border: 2px solid #30363d;
-            background: #ffffff;
-            display: block;
-        }
+    #simCanvas, #chartPanel, #stats, #networkCanvas, #settingsView {
+        border: none !important;
+        border-radius: 18px !important;
+        box-shadow: 0 8px 24px rgba(15,23,42,0.08);
+    }
 
-        #networkCanvas {
-            border: 1px solid #d0d7de;
-            background: #ffffff;
-            display: block;
-            margin-top: 12px;
-        }
+    /* --- NEW GRID & FLEX LAYOUTS --- */
+    #mainLayout {
+        display: grid;
+        grid-template-columns: 800px 650px; /* width of main simulation window, width of sidebar */
+        gap: 24px;
+        align-items: start;
+        margin-bottom: 24px;
+    }
 
-        #mainLayout {
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-        }
+    #simCanvas {
+        background: white !important;
+        display: block;
+    }
 
-        #chartPanel {
-            width: 600px;
-            height: 600px;
-            background: white;
-            border: 1px solid #d0d7de;
-            border-radius: 8px;
-            padding: 12px;
-        }
+    /* Container holding stats and NN side-by-side vertically matching canvas height */
+    #sideContainer {
+        display: flex;
+        flex-direction: column;
+        height: 600px; /* Explicitly matches canvas height */
+        gap: 16px;
+    }
 
-        #populationChart {
-            width: 100%;
-        }
+    #stats {
+        background: white !important;
+        padding: 16px !important;
+        flex: 1;             /* Takes 1 share of space */
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
 
-        /* Settings View Styles */
-        .setting-group {
-            margin-bottom: 16px;
-            max-width: 400px;
-        }
+    #networkCanvas {
+        background: white !important;
+        width: 100% !important;
+        flex: 1;             /* Takes 2 shares of space (Twice as large as stats) */
+        height: 0 !important; /* CRITICAL: Forces flexbox to calculate height, not the canvas internal size */
+        display: block;
+    }
 
-        .setting-group label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 4px;
-            font-size: 14px;
-        }
+    #chartPanel {
+        background: white !important;
+        max-width: 600px; /* graph width Total grid width (800 + 450 + 24 gap) */
+        padding: 16px;
+        margin-top: 16px;
+    }
 
-        .setting-group input[type="range"] {
-            width: 100%;
-        }
+    #status {
+        margin: 12px 0;
+        font-weight: 600;
+        color: #475569;
+        font-size: 14px;
+    }
+
+    /* --- NEW STATS CARDS GRID UI --- */
+    .stats-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 12px;
+        border-bottom: 2px solid #f1f5f9;
+        padding-bottom: 6px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        flex-grow: 1;
+    }
+
+    .stat-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 8px 12px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-card .label {
+        font-size: 11px;
+        color: #64748b;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card .value {
+        font-size: 15px;
+        color: #0f172a;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .empty-stats-msg {
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-style: italic;
+        text-align: center;
+    }
+
+    input[type=range] {
+        accent-color: #3b82f6;
+    }
     </style>
 </head>
 <body>
@@ -99,169 +178,192 @@
             <button id="stepButton">Step</button>
             <button id="saveButton">Save</button>
             <button id="loadButton">Load</button>
-            <button id="settingsButton">Simulation Settings</button> <input type="file" id="loadInput" accept=".pkl" style="display:none">
-            <button id="killButton">Kill (Debug)</button>
-
+            <button id="killButton" style="background-color: #ffeef0; color: #d73a49; border-color: #cea0a5;">Kill Selected</button>
+            <button id="settingsButton">Simulation Settings</button>
+            <input type="file" id="loadInput" accept=".pkl" style="display:none">
         </div>
 
         <div id="mainLayout">
             <canvas id="simCanvas" width="800" height="600"></canvas>
 
-            <div id="chartPanel">
-                <canvas id="populationChart"></canvas>
+            <div id="sideContainer">
+                <div id="stats">
+                    <div class="empty-stats-msg">Click a herbivore or predator to view stats.</div>
+                </div>
+                <canvas id="networkCanvas" width="450" height="290"></canvas>
             </div>
         </div>
 
         <div id="status">Loading...</div>
-        <div id="stats" style="margin-top:12px; padding:10px; border:1px solid #d0d7de; border-radius:6px; background:#ffffff; max-width:820px; font-size:13px; line-height:1.5; color:#111827;">Click a herbivore or predator to view stats.</div>
-        <canvas id="networkCanvas" width="820" height="300"></canvas>
+
+        <div id="chartPanel">
+            <canvas id="populationChart"></canvas>
+        </div>
     </div>
 
-    <div id="settingsView" style="display: none; background: white; padding: 25px; border: 1px solid #d0d7de; border-radius: 8px; max-width: 850px; max-height: 85vh; overflow-y: auto;">
-        <h2>Simulation Settings</h2>
-        <p style="color: #666; margin-bottom: 20px;">Adjust the parameters of your evolutionary ecosystem environment.</p>
+    <div id="settingsView" style="display: none; background: white; padding: 25px; border: 1px solid #d0d7de; border-radius: 8px; max-width: 850px;">
+
+        <h2 style="margin-bottom: 4px;">Simulation Settings</h2>
+        <p style="color: #666; margin-bottom: 20px;">Adjust environmental constraints, parameters, and resurrection conditions.</p>
 
         <style>
-            .settings-section { margin-bottom: 24px; border-bottom: 1px solid #e1e4e8; padding-bottom: 16px; }
-            .settings-section h3 { margin-bottom: 12px; color: #0366d6; font-size: 16px; }
-            .setting-desc { font-size: 12px; color: #586069; margin: 2px 0 8px 0; font-style: italic; }
+            .tabs { display: flex; gap: 4px; border-bottom: 1px solid #e1e4e8; margin-bottom: 1.5rem; }
+            .tab-btn { padding: 8px 16px; font-size: 14px; background: none; border: none; border-bottom: 2px solid transparent; color: #586069; cursor: pointer; margin-bottom: -1px; border-radius: 0; }
+            .tab-btn.active { color: #20232a; border-bottom-color: #20232a; font-weight: 600; }
+            .tab-btn:hover:not(.active) { color: #20232a; background: #f6f8fa; }
+            .tab-panel { display: none; }
+            .tab-panel.active { display: block; }
+            .sg { margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid #e1e4e8; }
+            .sg:last-child { border-bottom: none; margin-bottom: 0; }
+            .sg label { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+            .sg label span { font-weight: normal; color: #586069; font-size: 13px; }
+            .sg p { font-size: 12px; color: #586069; margin: 0 0 6px; font-style: italic; line-height: 1.5; }
+            .sg input[type=range] { width: 100%; }
+            .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
+            .section-label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #8a9199; margin: 1.5rem 0 1rem; }
+            .section-label:first-child { margin-top: 0; }
         </style>
 
-        <div class="settings-section">
-            <h3>Global Environment Parameters</h3>
-            
-            <div class="setting-group">
-                <label for="worldSpeedInput">World Speed Multiplier: <span id="worldSpeedValue">1.0</span>x</label>
-                <p class="setting-desc">Speeds up or slows down time processing steps across the ecosystem.</p>
-                <input type="range" id="worldSpeedInput" min="0.1" max="5.0" step="0.1" value="1.0">
-            </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('global')">Global</button>
+            <button class="tab-btn" onclick="switchTab('plants')">Plants</button>
+            <button class="tab-btn" onclick="switchTab('predators')">Predators</button>
+            <button class="tab-btn" onclick="switchTab('herbivores')">Herbivores</button>
+        </div>
 
-            <div class="setting-group">
-                <label for="globalMutationRateInput">Global Mutation Rate: <span id="globalMutationRateValue">0.025</span></label>
-                <p class="setting-desc">Probability that an individual gene/weight mutates during reproduction cycles.</p>
-                <input type="range" id="globalMutationRateInput" min="0.0" max="1.0" step="0.005" value="0.025">
+        <!-- GLOBAL -->
+        <div id="tab-global" class="tab-panel active">
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>World Speed Multiplier <span id="worldSpeedValue">1.15</span>x</label><p>Speeds up or slows down time processing steps across the ecosystem.</p><input type="range" id="worldSpeedInput" min="0.1" max="5.0" step="0.05" value="1.15" oninput="document.getElementById('worldSpeedValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+                <div class="sg"><label>Maximum Animal Speed <span id="maxSpeedValue">30</span></label><p>Maximum velocity attainable by animals. The neural net output scales with this.</p><input type="range" id="maxSpeedInput" min="10" max="100" step="5" value="30" oninput="document.getElementById('maxSpeedValue').textContent=this.value"></div>
+                <div class="sg"><label>Max Angular Velocity <span id="maxAngularVelocityValue">3.5</span></label><p>How fast animals can turn.</p><input type="range" id="maxAngularVelocityInput" min="0.5" max="10.0" step="0.1" value="3.5" oninput="document.getElementById('maxAngularVelocityValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Global Mutation Rate <span id="globalMutationRateValue">0.035</span></label><p>Probability that an individual weight, bias, or neuron count mutates during reproduction.</p><input type="range" id="globalMutationRateInput" min="0.0" max="1.0" step="0.005" value="0.035" oninput="document.getElementById('globalMutationRateValue').textContent=parseFloat(this.value).toFixed(3)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="globalMutationStrengthInput">Global Mutation Strength: <span id="globalMutationStrengthValue">0.03</span></label>
-                <p class="setting-desc">The maximum magnitude variance applied to a mutating weight node value.</p>
-                <input type="range" id="globalMutationStrengthInput" min="0.0" max="1.0" step="0.01" value="0.03">
+            <div>
+                <div class="sg"><label>Global Mutation Strength <span id="globalMutationStrengthValue">0.04</span></label><p>If a weight mutates, this is the standard deviation of the gaussian noise applied to it.</p><input type="range" id="globalMutationStrengthInput" min="0.01" max="1.0" step="0.01" value="0.04" oninput="document.getElementById('globalMutationStrengthValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+                <div class="sg"><label>Weight Std Dev (New Neurons) <span id="weightStdNewNeuronsValue">0.35</span></label><p>When a new neuron appears, this standard deviation is used to initialise its connected weights.</p><input type="range" id="weightStdNewNeuronsInput" min="0.05" max="1.5" step="0.05" value="0.35" oninput="document.getElementById('weightStdNewNeuronsValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+                <div class="sg"><label>Initial Herbivores <span id="startingHerbivoreValue">100</span></label><p>Number of herbivores that appear at the start.</p><input type="range" id="startingHerbivoreInput" min="0" max="500" step="10" value="100" oninput="document.getElementById('startingHerbivoreValue').textContent=this.value"></div>
+                <div class="sg"><label>Initial Predators <span id="startingPredatorValue">20</span></label><p>Number of predators that appear at the start.</p><input type="range" id="startingPredatorInput" min="0" max="200" step="5" value="20" oninput="document.getElementById('startingPredatorValue').textContent=this.value"></div>
+                <div class="sg"><label>Initial Plants <span id="startingPlantValue">100</span></label><p>Number of plants that appear at the start.</p><input type="range" id="startingPlantInput" min="10" max="500" step="10" value="100" oninput="document.getElementById('startingPlantValue').textContent=this.value"></div>
+            </div>
             </div>
         </div>
 
-        <div class="settings-section">
-            <h3>Plant & Resource Configuration</h3>
-
-            <div class="setting-group">
-                <label for="maxPlantInput">Max Plant Capacity: <span id="maxPlantValue">300</span></label>
-                <p class="setting-desc">The absolute limit of plant entities allowed to exist simultaneously.</p>
-                <input type="range" id="maxPlantInput" min="10" max="1000" step="10" value="300">
+        <!-- PLANTS -->
+        <div id="tab-plants" class="tab-panel">
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Max Plant Capacity <span id="maxPlantValue">300</span></label><p>The absolute limit of plants allowed to exist simultaneously.</p><input type="range" id="maxPlantInput" min="10" max="1000" step="10" value="300" oninput="document.getElementById('maxPlantValue').textContent=this.value"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="plantSizeInput">Plant Collision Size: <span id="plantSizeValue">5.0</span></label>
-                <p class="setting-desc">The physics radius thickness of each individual plant element.</p>
-                <input type="range" id="plantSizeInput" min="1.0" max="20.0" step="0.5" value="5.0">
+            <div>
+                <div class="sg"><label>Plant Nutrition Value <span id="plantNutritionValueValue">0.85</span></label><p>How much satiety a herbivore gains when eating a single plant.</p><input type="range" id="plantNutritionValueInput" min="0.1" max="3.0" step="0.05" value="0.85" oninput="document.getElementById('plantNutritionValueValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+                <div class="sg"><label>Plant Regrowth Power <span id="plantRegrowthPowerValue">1.0</span></label><p>The larger this is, the faster plants replenish. At 1, plants reproduce every 15 seconds and a random plant appears every second.</p><input type="range" id="plantRegrowthPowerInput" min="0.1" max="5.0" step="0.1" value="1.0" oninput="document.getElementById('plantRegrowthPowerValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="plantNutritionValueInput">Plant Nutrition Value: <span id="plantNutritionValueValue">0.75</span></label>
-                <p class="setting-desc">How much individual satiety points a herbivore gains upon chewing a plant unit.</p>
-                <input type="range" id="plantNutritionValueInput" min="0.1" max="3.0" step="0.05" value="0.75">
-            </div>
-
-            <div class="setting-group">
-                <label for="plantRegrowthPowerInput">Plant Regrowth Power: <span id="plantRegrowthPowerValue">1.0</span></label>
-                <p class="setting-desc">Dictates plant creation velocity intervals across random patches.</p>
-                <input type="range" id="plantRegrowthPowerInput" min="0.1" max="5.0" step="0.1" value="1.0">
             </div>
         </div>
 
-        <div class="settings-section">
-            <h3>Herbivore Agent Configuration</h3>
-
-            <div class="setting-group">
-                <label for="maxHerbivoreInput">Max Herbivore Capacity: <span id="maxHerbivoreValue">2000</span></label>
-                <p class="setting-desc">Hard ceiling capping maximum active live herbivore organism agents.</p>
-                <input type="range" id="maxHerbivoreInput" min="50" max="3000" step="50" value="2000">
+        <!-- PREDATORS -->
+        <div id="tab-predators" class="tab-panel">
+            <div class="section-label">Population</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Max Predator Capacity <span id="maxPredatorValue">1000</span></label><p>How many predators can exist simultaneously.</p><input type="range" id="maxPredatorInput" min="50" max="2000" step="50" value="1000" oninput="document.getElementById('maxPredatorValue').textContent=this.value"></div>
+                <div class="sg"><label>Average Lifespan <span id="predatorAvgAgeValue">120.0</span>s</label><p>Average life expectancy of predators.</p><input type="range" id="predatorAvgAgeInput" min="20.0" max="400.0" step="5.0" value="120.0" oninput="document.getElementById('predatorAvgAgeValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Lifespan Std Dev <span id="predatorAgeStdValue">7.0</span>s</label><p>Standard deviation of predator lifespan.</p><input type="range" id="predatorAgeStdInput" min="0.0" max="40.0" step="0.5" value="7.0" oninput="document.getElementById('predatorAgeStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreSatietyLossInput">Satiety Loss Factor: <span id="herbivoreSatietyLossValue">0.006</span></label>
-                <p class="setting-desc">Base metabolic starvation rate (multiplied against current animal speed velocity).</p>
-                <input type="range" id="herbivoreSatietyLossInput" min="0.001" max="0.05" step="0.001" value="0.006">
+            <div>
+                <div class="sg"><label>Maturity Age <span id="predatorMinAgeReproductionValue">24.0</span>s</label><p>Predators must be at least this old to start reproducing.</p><input type="range" id="predatorMinAgeReproductionInput" min="0.0" max="150.0" step="1.0" value="24.0" oninput="document.getElementById('predatorMinAgeReproductionValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Vision Range <span id="predatorVisionRangeValue">220</span>px</label><p>How far predators can see.</p><input type="range" id="predatorVisionRangeInput" min="50" max="600" step="10" value="220" oninput="document.getElementById('predatorVisionRangeValue').textContent=this.value"></div>
+                <div class="sg"><label>Field of Vision <span id="predatorFOVValue">1.05</span> rad</label><p>The spread of the predator's vision sector. How wide they can see.</p><input type="range" id="predatorFOVInput" min="0.2" max="6.28" step="0.05" value="1.05" oninput="document.getElementById('predatorFOVValue').textContent=parseFloat(this.value).toFixed(2)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreMaxSatietyInput">Max Satiety Storage: <span id="herbivoreMaxSatietyValue">2.0</span></label>
-                <p class="setting-desc">Maximum internal stomach volume storage ceiling for herbivore agents.</p>
-                <input type="range" id="herbivoreMaxSatietyInput" min="0.5" max="5.0" step="0.1" value="2.0">
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreAvgGestationInput">Avg Gestation Time: <span id="herbivoreAvgGestationValue">25.0</span>s</label>
-                <p class="setting-desc">Average expected length of pregnancy development before giving birth.</p>
-                <input type="range" id="herbivoreAvgGestationInput" min="5.0" max="100.0" step="1.0" value="25.0">
+            <div class="section-label">Reproduction</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Avg Gestation Time <span id="predatorAvgGestationValue">32.0</span>s</label><p>Average time required for a well-fed predator to spawn a child.</p><input type="range" id="predatorAvgGestationInput" min="5.0" max="120.0" step="1.0" value="32.0" oninput="document.getElementById('predatorAvgGestationValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Gestation Std Dev <span id="predatorGestationStdValue">5.0</span>s</label><p>Standard deviation of gestation time.</p><input type="range" id="predatorGestationStdInput" min="0.0" max="25.0" step="0.5" value="5.0" oninput="document.getElementById('predatorGestationStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreGestationStdInput">Gestation Time Std Dev: <span id="herbivoreGestationStdValue">5.0</span>s</label>
-                <p class="setting-desc">Variance distribution spread applied over pregnancy duration timers.</p>
-                <input type="range" id="herbivoreGestationStdInput" min="0.0" max="20.0" step="0.5" value="5.0">
+            <div>
+                <div class="sg"><label>Min Reproduction Satiety <span id="predatorMinReproductionSatietyValue">1.0</span></label><p>Predators will only reproduce when they are at least this sated.</p><input type="range" id="predatorMinReproductionSatietyInput" min="0.1" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('predatorMinReproductionSatietyValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Reproduction Satiety Loss <span id="predatorReproductionLossValue">0.4</span></label><p>Satiety subtracted from the parent predator upon spawning a child.</p><input type="range" id="predatorReproductionLossInput" min="0.1" max="1.5" step="0.05" value="0.4" oninput="document.getElementById('predatorReproductionLossValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+                <div class="sg"><label>Eating Inhibition Threshold <span id="predatorEatPercentThresholdValue">75</span>%</label><p>Predators cannot eat if their satiety is above this percentage.</p><input type="range" id="predatorEatPercentThresholdInput" min="10" max="100" step="5" value="75" oninput="document.getElementById('predatorEatPercentThresholdValue').textContent=this.value"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreMinReproductionSatietyInput">Min Reproduction Satiety: <span id="herbivoreMinReproductionSatietyValue">1.0</span></label>
-                <p class="setting-desc">Minimum required stomach nutrition depth to trigger gestation cycles.</p>
-                <input type="range" id="herbivoreMinReproductionSatietyInput" min="0.1" max="3.0" step="0.1" value="1.0">
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreReproductionLossInput">Reproduction Satiety Cost: <span id="herbivoreReproductionLossValue">0.5</span></label>
-                <p class="setting-desc">Stomach satiety energy instantly deducted and passed into offspring at birth.</p>
-                <input type="range" id="herbivoreReproductionLossInput" min="0.1" max="2.0" step="0.1" value="0.5">
+            <div class="section-label">Resurrection</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Resurrect Threshold <span id="predatorsResurrectAfterHerbivoresReachValue">140</span> herbivores</label><p>Predators begin to be resurrected when the herbivore population reaches this size.</p><input type="range" id="predatorsResurrectAfterHerbivoresReachInput" min="10" max="500" step="10" value="140" oninput="document.getElementById('predatorsResurrectAfterHerbivoresReachValue').textContent=this.value"></div>
+                <div class="sg"><label>Fitness Archive Resurrection <span id="predatorResurrectionCountValue">15</span></label><p>Number of predators resurrected from the top historical fitness archive.</p><input type="range" id="predatorResurrectionCountInput" min="0" max="50" step="1" value="15" oninput="document.getElementById('predatorResurrectionCountValue').textContent=this.value"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreEatPercentThresholdInput">Eating Inhibition Threshold: <span id="herbivoreEatPercentThresholdValue">75</span>%</label>
-                <p class="setting-desc">Agents refuse to eat plants if their current full meter percentage is above this point.</p>
-                <input type="range" id="herbivoreEatPercentThresholdInput" min="10" max="100" step="5" value="75">
+            <div>
+                <div class="sg"><label>Recent Archive Resurrection <span id="predatorResurrectionRecentCountValue">15</span></label><p>Number of predators resurrected from the most recent generations.</p><input type="range" id="predatorResurrectionRecentCountInput" min="0" max="50" step="1" value="15" oninput="document.getElementById('predatorResurrectionRecentCountValue').textContent=this.value"></div>
+                <div class="sg"><label>Random Mutation Resurrection <span id="predatorResurrectionRandomCountValue">15</span></label><p>Number of randomly spawned predators added during a resurrection event.</p><input type="range" id="predatorResurrectionRandomCountInput" min="0" max="50" step="1" value="15" oninput="document.getElementById('predatorResurrectionRandomCountValue').textContent=this.value"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreFOVInput">Field of Vision (FOV): <span id="herbivoreFOVValue">3.77</span> rad</label>
-                <p class="setting-desc">The viewing angle wrap arc for sensory vision ray casting (1.2 * PI ≈ 3.77).</p>
-                <input type="range" id="herbivoreFOVInput" min="0.5" max="6.28" step="0.05" value="3.77">
             </div>
+        </div>
 
-            <div class="setting-group">
-                <label for="herbivoreVisionRangeInput">Vision Sensory Range: <span id="herbivoreVisionRangeValue">170</span>px</label>
-                <p class="setting-desc">The maximum absolute distance an agent's raycast vision can detect targets.</p>
-                <input type="range" id="herbivoreVisionRangeInput" min="50" max="500" step="10" value="170">
+        <!-- HERBIVORES -->
+        <div id="tab-herbivores" class="tab-panel">
+            <div class="section-label">Population</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Max Herbivore Capacity <span id="maxHerbivoreValue">2000</span></label><p>Maximum number of herbivores that can be alive simultaneously.</p><input type="range" id="maxHerbivoreInput" min="50" max="3000" step="50" value="2000" oninput="document.getElementById('maxHerbivoreValue').textContent=this.value"></div>
+                <div class="sg"><label>Average Lifespan <span id="herbivoreAvgAgeValue">100.0</span>s</label><p>Average life expectancy of herbivores.</p><input type="range" id="herbivoreAvgAgeInput" min="10.0" max="300.0" step="5.0" value="100.0" oninput="document.getElementById('herbivoreAvgAgeValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Lifespan Std Dev <span id="herbivoreAgeStdValue">7.0</span>s</label><p>Standard deviation of herbivore lifespan.</p><input type="range" id="herbivoreAgeStdInput" min="0.0" max="30.0" step="0.5" value="7.0" oninput="document.getElementById('herbivoreAgeStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreAvgAgeInput">Average Life Span: <span id="herbivoreAvgAgeValue">100.0</span>s</label>
-                <p class="setting-desc">Average absolute expected life expectancy baseline before natural death.</p>
-                <input type="range" id="herbivoreAvgAgeInput" min="10.0" max="300.0" step="5.0" value="100.0">
+            <div>
+                <div class="sg"><label>Maturity Age <span id="herbivoreMinAgeReproductionValue">23.0</span>s</label><p>Herbivores must be at least this old before they can reproduce.</p><input type="range" id="herbivoreMinAgeReproductionInput" min="0.0" max="100.0" step="1.0" value="23.0" oninput="document.getElementById('herbivoreMinAgeReproductionValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Vision Range <span id="herbivoreVisionRangeValue">150</span>px</label><p>How far herbivores can see.</p><input type="range" id="herbivoreVisionRangeInput" min="50" max="500" step="10" value="150" oninput="document.getElementById('herbivoreVisionRangeValue').textContent=this.value"></div>
+                <div class="sg"><label>Field of Vision <span id="herbivoreFOVValue">3.46</span> rad</label><p>The herbivore's viewing angle (1.1 × π ≈ 3.46 rad).</p><input type="range" id="herbivoreFOVInput" min="0.5" max="6.28" step="0.05" value="3.46" oninput="document.getElementById('herbivoreFOVValue').textContent=parseFloat(this.value).toFixed(2)"></div>
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreAgeStdInput">Life Span Std Dev: <span id="herbivoreAgeStdValue">7.0</span>s</label>
-                <p class="setting-desc">The randomized normal deviation curve width calculated on a per-agent lifespan.</p>
-                <input type="range" id="herbivoreAgeStdInput" min="0.0" max="30.0" step="0.5" value="7.0">
             </div>
-
-            <div class="setting-group">
-                <label for="herbivoreMinAgeReproductionInput">Maturity Age for Breeding: <span id="herbivoreMinAgeReproductionValue">20.0</span>s</label>
-                <p class="setting-desc">An agent must survive to at least this age before its reproduction systems trigger.</p>
-                <input type="range" id="herbivoreMinAgeReproductionInput" min="0.0" max="100.0" step="1.0" value="20.0">
+            <div class="section-label">Hunger & Feeding</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Satiety Loss Rate <span id="herbivoreSatietyLossValue">0.006</span></label><p>How quickly herbivores lose satiety. Scales with movement speed.</p><input type="range" id="herbivoreSatietyLossInput" min="0.001" max="0.05" step="0.001" value="0.006" oninput="document.getElementById('herbivoreSatietyLossValue').textContent=parseFloat(this.value).toFixed(3)"></div>
+                <div class="sg"><label>Max Satiety <span id="herbivoreMaxSatietyValue">2.0</span></label><p>Maximum satiety a herbivore can store.</p><input type="range" id="herbivoreMaxSatietyInput" min="0.5" max="5.0" step="0.1" value="2.0" oninput="document.getElementById('herbivoreMaxSatietyValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            <div>
+                <div class="sg"><label>Eating Inhibition Threshold <span id="herbivoreEatPercentThresholdValue">75</span>%</label><p>Herbivores will not eat plants if their satiety is above this percentage.</p><input type="range" id="herbivoreEatPercentThresholdInput" min="10" max="100" step="5" value="75" oninput="document.getElementById('herbivoreEatPercentThresholdValue').textContent=this.value"></div>
+                <div class="sg"><label>Nutritional Value <span id="herbivoreNutritionValueValue">1.0</span></label><p>How much satiety a predator gains from eating one herbivore.</p><input type="range" id="herbivoreNutritionValueInput" min="0.1" max="3.0" step="0.1" value="1.0" oninput="document.getElementById('herbivoreNutritionValueValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            </div>
+            <div class="section-label">Reproduction</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Avg Gestation Time <span id="herbivoreAvgGestationValue">28.0</span>s</label><p>Average time for a well-fed herbivore to produce offspring.</p><input type="range" id="herbivoreAvgGestationInput" min="5.0" max="100.0" step="1.0" value="28.0" oninput="document.getElementById('herbivoreAvgGestationValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Gestation Std Dev <span id="herbivoreGestationStdValue">5.0</span>s</label><p>Standard deviation of gestation time.</p><input type="range" id="herbivoreGestationStdInput" min="0.0" max="20.0" step="0.5" value="5.0" oninput="document.getElementById('herbivoreGestationStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            <div>
+                <div class="sg"><label>Min Reproduction Satiety <span id="herbivoreMinReproductionSatietyValue">1.1</span></label><p>Herbivores will only reproduce when they are at least this sated.</p><input type="range" id="herbivoreMinReproductionSatietyInput" min="0.1" max="3.0" step="0.1" value="1.1" oninput="document.getElementById('herbivoreMinReproductionSatietyValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+                <div class="sg"><label>Reproduction Satiety Cost <span id="herbivoreReproductionLossValue">0.5</span></label><p>Satiety deducted from the parent when offspring are born.</p><input type="range" id="herbivoreReproductionLossInput" min="0.1" max="2.0" step="0.1" value="0.5" oninput="document.getElementById('herbivoreReproductionLossValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            </div>
+            <div class="section-label">Resurrection</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Fitness Archive Resurrection <span id="herbivoreResurrectionCountValue">40</span></label><p>Number of herbivores resurrected from the top historical fitness archive.</p><input type="range" id="herbivoreResurrectionCountInput" min="0" max="100" step="5" value="40" oninput="document.getElementById('herbivoreResurrectionCountValue').textContent=this.value"></div>
+                <div class="sg"><label>Recent Archive Resurrection <span id="herbivoreResurrectionRecentCountValue">40</span></label><p>Number of herbivores resurrected from the most recent generations.</p><input type="range" id="herbivoreResurrectionRecentCountInput" min="0" max="100" step="5" value="40" oninput="document.getElementById('herbivoreResurrectionRecentCountValue').textContent=this.value"></div>
+            </div>
+            <div>
+                <div class="sg"><label>Random Mutation Resurrection <span id="herbivoreResurrectionRandomCountValue">40</span></label><p>Number of randomly spawned herbivores added during a resurrection event.</p><input type="range" id="herbivoreResurrectionRandomCountInput" min="0" max="100" step="5" value="40" oninput="document.getElementById('herbivoreResurrectionRandomCountValue').textContent=this.value"></div>
+            </div>
             </div>
         </div>
 
         <br>
         <button id="backButton" style="background-color: #f0f0f0;">Go Back</button>
         <button id="restartSettingsButton" style="background-color: #2f8f3a; color: white; border-color: #25722e;">Restart with new settings</button>
+
+        <script>
+            function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            }
+        </script>
     </div>
 
     <script src="/static/app.js"></script>
