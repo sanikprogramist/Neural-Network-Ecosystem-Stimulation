@@ -639,8 +639,14 @@ function updateStatsPanel(message) {
 }
 
 function drawLiveNeuralNetwork(nn) {
+    const w = networkCanvas.width;
+    const h = networkCanvas.height;
+
     if (!nn) {
         networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
+        networkCtx.fillStyle = '#111827';
+        networkCtx.textAlign = 'center';
+        networkCtx.fillText("Click a predator or herbivore to view its neural network brain!", w / 2, h / 2);
         return;
     }
 
@@ -650,18 +656,6 @@ function drawLiveNeuralNetwork(nn) {
         networkCanvas.height = networkCanvas.clientHeight;
     }
 
-    const w = networkCanvas.width;
-    const h = networkCanvas.height;
-    
-    // Exit early if the network structure is invalid
-    if (!nn.inputs || !nn.hidden_dim_1 || !nn.hidden_dim_2 || !nn.output) {
-        console.log(nn)
-        networkCtx.clearRect(0, 0, w, h);
-        networkCtx.textAlign = 'center';
-        networkCtx.fillText("Invalid neural network... This really shouldn't be happening", w/2, h/2);
-        return;
-    }
-    
     const padding = 30; 
     const nodeRadius = 6;
     const t = performance.now() / 1000;
@@ -670,26 +664,64 @@ function drawLiveNeuralNetwork(nn) {
     networkCtx.fillStyle = '#f5f7fb';
     networkCtx.fillRect(0, 0, w, h);
 
-    const layers = [
-        { values: nn.inputs,       x: 60 },
-        { values: nn.hidden_dim_1, x: w * 0.33 },
-        { values: nn.hidden_dim_2, x: w * 0.66 },
-        { values: nn.output,       x: w - 60 },
-    ];
+    // ==========================================
+    // 1. DYNAMICALLY RECONSTRUCT LAYERS ARRAY
+    // ==========================================
+    const layers = [];
+    
+    // Add input layer
+    layers.push({ label: 'Input', values: nn.inputs || [], x: 60 });
+    
+    // Add dynamic number of hidden layers
+    const hActivations = nn.hidden_layers_activations || [];
+    hActivations.forEach((actValues, index) => {
+        // Space columns evenly between 60px and (w - 60px)
+        const progressionFraction = (index + 1) / (hActivations.length + 1);
+        const columnX = 60 + progressionFraction * (w - 120);
+        layers.push({ 
+            label: `Hidden ${index + 1}`, 
+            values: actValues, 
+            x: columnX 
+        });
+    });
 
-    // Validate weight matrices exist and match expected structure
-    const weightMatrices = nn.weights ? [
-        nn.weights.input_to_hidden1,
-        nn.weights.hidden1_to_hidden2,
-        nn.weights.hidden2_to_output,
-    ] : null;
+    // Add output layer (override last X coordinate if 0 hidden layers existed)
+    const outputX = hActivations.length === 0 ? w - 60 : w - 60;
+    layers.push({ label: 'Output', values: nn.output || [], x: w - 60 });
+
+    // Recalculate intermediate column positions evenly if layers changed
+    if (hActivations.length > 0) {
+        for (let i = 1; i <= hActivations.length; i++) {
+            layers[i].x = 60 + (i / (hActivations.length + 1)) * (w - 120);
+        }
+    }
+
+    // ==========================================
+    // 2. DYNAMICALLY EXTRACT WEIGHT MATRICES
+    // ==========================================
+    const weightMatrices = [];
+    if (nn.weights) {
+        // Collect layer_0_weights, layer_1_weights, etc.
+        let layerIdx = 0;
+        while (nn.weights[`layer_${layerIdx}_weights`] !== undefined) {
+            weightMatrices.push(nn.weights[`layer_${layerIdx}_weights`]);
+            layerIdx++;
+        }
+        // Append the output layer weights matrix
+        if (nn.weights.out_weights) {
+            weightMatrices.push(nn.weights.out_weights);
+        }
+    }
 
     const getY = (layerIndex, i) => {
         const layer = layers[layerIndex];
         if (!layer || !layer.values || layer.values.length === 0) {
-            return padding; // fallback position
+            return padding;
         }
-        const spacing = (h - (padding * 2.5)) / Math.max(layer.values.length - 1, 1);
+        if (layer.values.length === 1) {
+            return h / 2; // Center solitary nodes vertically
+        }
+        const spacing = (h - (padding * 2.5)) / (layer.values.length - 1);
         return padding + i * spacing;
     };
 
@@ -698,7 +730,6 @@ function drawLiveNeuralNetwork(nn) {
         const from = layers[l];
         const to   = layers[l + 1];
         
-        // Skip if either layer has invalid values
         if (!from || !to || !from.values || !to.values) continue;
         if (from.values.length === 0 || to.values.length === 0) continue;
 
@@ -715,7 +746,7 @@ function drawLiveNeuralNetwork(nn) {
                 let signal    = 0;
                 let absSignal = 0;
 
-                // Safely check weight matrices
+                // Safely read dynamic sub-matrices
                 if (weightMatrices && weightMatrices[l] && weightMatrices[l][j]) {
                     const weight = weightMatrices[l][j][i];
                     if (weight !== undefined && weight !== null) {
@@ -724,8 +755,8 @@ function drawLiveNeuralNetwork(nn) {
                         absSignal = Math.abs(signal);
 
                         edgeWidth = 0.5 + Math.min(absSignal, 1.0) * 3.5;
-
                         const alpha = 0.08 + Math.min(absSignal, 1.0) * 0.75;
+                        
                         edgeColor = signal > 0
                             ? `rgba(40, 200, 80, ${alpha})`
                             : signal < 0
@@ -734,7 +765,7 @@ function drawLiveNeuralNetwork(nn) {
                     }
                 }
 
-                // Static edge
+                // Render connection lines
                 networkCtx.beginPath();
                 networkCtx.moveTo(x1, y1);
                 networkCtx.lineTo(x2, y2);
@@ -742,7 +773,7 @@ function drawLiveNeuralNetwork(nn) {
                 networkCtx.lineWidth   = edgeWidth;
                 networkCtx.stroke();
 
-                // Travelling pulse (optional)
+                // Render traveling pulse
                 if (typeof neuralNetPulsesEnabled !== 'undefined' && neuralNetPulsesEnabled && absSignal >= 0.05) {
                     const speed       = 0.3 + Math.min(absSignal, 1.0) * 1.2;
                     const phaseOffset = ((l * 97 + i * 31 + j * 13) % 100) / 100;
@@ -753,9 +784,7 @@ function drawLiveNeuralNetwork(nn) {
 
                     const pulseRadius = 1.5 + Math.min(absSignal, 1.0) * 2.5;
                     const pulseAlpha  = 0.5 + Math.min(absSignal, 1.0) * 0.5;
-                    const pulseColor  = signal > 0
-                        ? `rgba(80, 240, 120,`
-                        : `rgba(255, 80, 80,`;
+                    const pulseColor  = signal > 0 ? `rgba(80, 240, 120,` : `rgba(255, 80, 80,`;
 
                     const glow = networkCtx.createRadialGradient(px, py, 0, px, py, pulseRadius * 3);
                     glow.addColorStop(0, `${pulseColor}${pulseAlpha})`);
@@ -788,13 +817,13 @@ function drawLiveNeuralNetwork(nn) {
             const x     = layer.x;
             const y     = getY(l, i);
 
-            // Glow
+            // Glow ring
             networkCtx.beginPath();
             networkCtx.arc(x, y, nodeRadius + Math.abs(n) * 4, 0, Math.PI * 2);
             networkCtx.fillStyle = `rgba(${red},${green},80,${alpha * 0.4})`;
             networkCtx.fill();
 
-            // Core
+            // Core center node
             networkCtx.beginPath();
             networkCtx.arc(x, y, nodeRadius, 0, Math.PI * 2);
             networkCtx.fillStyle = `rgba(${red},${green},80,${alpha})`;
@@ -802,14 +831,13 @@ function drawLiveNeuralNetwork(nn) {
         }
     }
 
-    // --- Labels ---
+    // --- Dynamic Text Labels ---
     networkCtx.fillStyle = '#111827';
     networkCtx.font = '12px sans-serif';
     networkCtx.textAlign = 'center';
-    ['Input', 'Hidden 1', 'Hidden 2', 'Output'].forEach((label, i) => {
-        if (layers[i]) {
-            networkCtx.fillText(label, layers[i].x, h - 8);
-        }
+    
+    layers.forEach((layer) => {
+        networkCtx.fillText(layer.label, layer.x, h - 8);
     });
 }
 

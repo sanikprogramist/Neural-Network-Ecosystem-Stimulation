@@ -5,22 +5,22 @@ import torch
 import threading
 
 from scipy.spatial import distance_matrix
-from scipy.spatial import cKDTree
+#from scipy.spatial import cKDTree
 from game_functions import *
 from class_animal_brain_nn import *
 
 #NOTES:
-# 1. fitness is exploitable but i dont know how to fix it
+# 1. fitness is exploitable but i dont know how to fix it. It probably will always be exploitable
 # 2. herbivore reproduction timer is going up even though pop is at max - not sure if this is a problem
-# 14. start them out with 1 hidden layer, then they can evolve to have more. if they want. More flexibility
-# 15. more graphs?
-# 17. some settings between predators and herbivores dont match
+# 17. some settings missing
 # 18. save all chart data from the whole runtime
-# 19. brain designer tab? first need more flexible brain architecture
-# 21. would be nice to connect animal sizes to settings
+# 19. brain designer tab? 
+# 21. would be nice to connect animal sizes to settings and app.js
+# 22. age pyramid constant scale
+# 23. may be too complicated - skip connections. Would be really cool
 
 #since last commit:
-# - training predators
+# flexible brain architecture!
 
 class World:
 
@@ -34,24 +34,24 @@ class World:
         self.selected_predator_index = None
         self.world_time = 0
 
-        self.max_speed = 30 #setting exists
+        self.max_speed = 25 #setting exists
         self.max_angular_velocity = 3.5 #setting exists
 
         self.global_mutation_rate = 0.035 #setting exists
         self.global_mutation_strength = 0.04 #setting exists
         self.colour_change_strength = 15 
-        self.min_hidden_dim_size = 2 # starting bound - they might evolve smaller or larger
-        self.max_hidden_dim_size = 5 # starting bound
+        self.min_hidden_dim_size = 1 # ADD 
+        self.max_hidden_dim_size = 10 # ADD 
         self.weight_std_for_new_neurons = 0.35 #setting exists
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
-
         self.enable_training_predators = True #ADD enable or disable always spawning a random "training" predator when there are no predators left, to exert selection pressure on herbivores even in the absence of predators. 
+        
         self.starting_herbivore = 100 #setting exists
-        self.starting_predator = 20 #setting exists
+        self.starting_predator = 0 #setting exists
         self.starting_plant = 100 #setting exists
 
         #plants
-        self.max_plant = 250 #setting exists
+        self.max_plant = 300 #setting exists
         self.plant_size = 5  
         self.plant_nutrition_value = 0.85 #setting exists
         self.plant_regrowth_power = 1.0 #setting exists
@@ -115,6 +115,7 @@ class World:
         self.selected_herbivore_nn_hdim1 = None
         self.selected_herbivore_nn_hdim2 = None
         self.selected_herbivore_nn_output = None
+        self.selected_herbivore_nn_activations = None
         self.herbivore_reproduction_timers = np.zeros((self.max_herbivore,))
         self.herbivore_gestation_time_reqs = np.zeros((self.max_herbivore,))
         self.herbivore_ages = np.zeros((self.max_herbivore,))
@@ -140,6 +141,7 @@ class World:
         self.selected_predator_nn_hdim1 = None
         self.selected_predator_nn_hdim2 = None
         self.selected_predator_nn_output = None 
+        self.selected_predator_nn_activations = None
         self.predator_reproduction_timers = np.zeros((self.max_predator,))
         self.predator_gestation_time_reqs = np.zeros((self.max_predator,))
         self.predator_ages = np.zeros((self.max_predator,))
@@ -169,9 +171,9 @@ class World:
         self.herbivore_resurrection_delay_counter = 0
         self.start_resurrecting_herbivores = False 
 
-        self.predator_resurrection_count = 15 #setting exists
-        self.predator_resurrection_recent_count = 15 #setting exists
-        self.predator_resurrection_random_count = 15 #setting exists       
+        self.predator_resurrection_count = 10 #setting exists
+        self.predator_resurrection_recent_count = 10 #setting exists
+        self.predator_resurrection_random_count = 10 #setting exists       
         self.predator_new_archive_size = 100 #this will store most recent animals
         self.predator_top_n = 20
         self.predators_resurrect_after_herbivores_reach = 140 #setting exists
@@ -295,6 +297,12 @@ class World:
         if self.selected_herbivore_index is not None and self.alive_herbivore_array[self.selected_herbivore_index]:
             brain = self.herbivore_brains[self.selected_herbivore_index]
             weights = to_json_compatible(brain.get_network_weights())
+            
+            # Safely look up dynamic activations arrays saved from the process loop
+            hidden_activations = []
+            if hasattr(self, 'selected_herbivore_nn_activations') and self.selected_herbivore_nn_activations is not None:
+                hidden_activations = [act.tolist() for act in self.selected_herbivore_nn_activations]
+
             selected = {
                 "species": "herbivore",
                 "id": int(self.selected_herbivore_index),
@@ -311,17 +319,22 @@ class World:
                 "vision_range": float(self.herbivore_vision_range),
                 "offspring_count": int(self.herbivore_offsping_count[self.selected_herbivore_index]),
 
-                "nn_distances_angles" : self.herbivore_nn_inputs[self.selected_herbivore_index,0:self.herbivore_num_external_infos].tolist(), #this is basically the inputs again
+                "nn_distances_angles" : self.herbivore_nn_inputs[self.selected_herbivore_index,0:self.herbivore_num_external_infos].tolist(),
                 "inputs": self.herbivore_nn_inputs[self.selected_herbivore_index].tolist(),
-                #clean this up later: input, hidden_dim1, hidden_dim2, output already contained in weights
-                "hidden_dim_1": self.selected_herbivore_nn_hdim1.tolist() if self.selected_herbivore_nn_hdim1 is not None else None,
-                "hidden_dim_2": self.selected_herbivore_nn_hdim2.tolist() if self.selected_herbivore_nn_hdim2 is not None else None,
+                "hidden_layers_activations": hidden_activations, 
                 "output": self.selected_herbivore_nn_output.tolist() if self.selected_herbivore_nn_output is not None else None,
                 "weights": weights,
             }
-        elif self.selected_predator_index is not None and self.alive_predator_array[self.selected_predator_index]:
+
+        if self.selected_predator_index is not None and self.alive_predator_array[self.selected_predator_index]:
             brain = self.predator_brains[self.selected_predator_index]
             weights = to_json_compatible(brain.get_network_weights())
+            
+            # Safely look up dynamic activations arrays saved from the process loop
+            hidden_activations = []
+            if hasattr(self, 'selected_predator_nn_activations') and self.selected_predator_nn_activations is not None:
+                hidden_activations = [act.tolist() for act in self.selected_predator_nn_activations]
+
             selected = {
                 "species": "predator",
                 "id": int(self.selected_predator_index),
@@ -338,11 +351,9 @@ class World:
                 "vision_range": float(self.predator_vision_range),
                 "offspring_count": int(self.predator_offsping_count[self.selected_predator_index]),
 
-                "nn_distances_angles" : self.predator_nn_inputs[self.selected_predator_index,0:self.predator_num_external_infos].tolist(), #this is basically the inputs again
+                "nn_distances_angles" : self.predator_nn_inputs[self.selected_predator_index,0:self.predator_num_external_infos].tolist(),
                 "inputs": self.predator_nn_inputs[self.selected_predator_index].tolist(),
-                #clean this up later: input, hidden_dim1, hidden_dim2, output already contained in weights
-                "hidden_dim_1": self.selected_predator_nn_hdim1.tolist() if self.selected_predator_nn_hdim1 is not None else None,
-                "hidden_dim_2": self.selected_predator_nn_hdim2.tolist() if self.selected_predator_nn_hdim2 is not None else None,
+                "hidden_layers_activations": hidden_activations, 
                 "output": self.selected_predator_nn_output.tolist() if self.selected_predator_nn_output is not None else None,
                 "weights": weights,
             }
@@ -557,7 +568,7 @@ class World:
         self.herbivore_nn_inputs[alive_indices,0:self.herbivore_num_external_infos] = output_from_perception_function
         self.herbivore_nn_inputs[alive_indices,self.herbivore_num_external_infos:self.herbivore_num_external_infos+2] = np.stack((1-(self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety), self.herbivore_speeds[alive_indices] / self.max_speed), axis=1)
 
-    def herbivores_process_NN(self, dt, just_getting_stats_for_NN_visualisation = False):
+    def herbivores_process_NN(self, dt):
         alive_indices = np.where(self.alive_herbivore_array)[0]
         if alive_indices.size == 0:
             return
@@ -571,23 +582,17 @@ class World:
             brain = self.herbivore_brains[idx]
             if idx == self.selected_herbivore_index:
                 with torch.no_grad():
-                    output, h1, h2 = brain(
-                        input_tensor[i].unsqueeze(0),
-                        return_activations=True
-                    )
-
-                self.selected_herbivore_nn_hdim1 = h1.cpu().numpy()[0]
-                self.selected_herbivore_nn_hdim2 = h2.cpu().numpy()[0]
+                    output, activations = brain(input_tensor[i].unsqueeze(0), return_activations=True)
+                
+                # Store dynamic activations list safely for UI/Logging
+                self.selected_herbivore_nn_activations = [act.cpu().numpy()[0] for act in activations]
                 self.selected_herbivore_nn_output = output.cpu().numpy()[0]
-
                 output = output.numpy()[0]
 
             else:
-                with torch.no_grad():
+                with torch.no_grad(): 
                     output = brain(input_tensor[i].unsqueeze(0), return_activations=False).numpy()[0]
             outputs.append(output)
-
-        if just_getting_stats_for_NN_visualisation: return
 
         outputs = np.array(outputs, dtype=np.float32)  # shape (N_alive, 2)
 
@@ -704,13 +709,19 @@ class World:
                 self.herbivore_life_expectancy[free_indeces] = np.random.normal(loc=self.herbivore_avg_age, scale=self.herbivore_age_std_dev, size=spawn_count)
                 self.herbivore_gestation_time_reqs[free_indeces] = np.random.normal(loc=self.herbivore_avg_gestation_time, scale=self.herbivore_gestation_time_std_dev, size=spawn_count)
                 for idx in free_indeces:
+                    # Generate a random initial layout: e.g., could be [], [8], [12, 6], etc.
+                    num_initial_layers = np.random.randint(0, 3) 
+                    random_dims = [
+                        np.random.randint(self.min_hidden_dim_size, self.max_hidden_dim_size + 1)
+                        for _ in range(num_initial_layers)
+                    ]
+                    
                     self.herbivore_brains[idx] = AnimalBrain(
-                        n_external_infos = self.herbivore_num_external_infos,
+                        n_external_infos=self.herbivore_num_external_infos,
                         n_self_infos=self.herbivore_self_infos,
-                        hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
-                        hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
-                        initial_weight_std = self.weight_std_for_new_neurons
-                        )
+                        hidden_dims=random_dims,
+                        initial_weight_std=self.weight_std_for_new_neurons
+                    )
             
             else: #spawning from a parent
                 self.herbivore_offsping_count[parent_index] += 1
@@ -734,6 +745,8 @@ class World:
                 #normal distribution for life expectancy and gestation time:
                 self.herbivore_life_expectancy[free_indeces] = np.random.normal(loc=self.herbivore_avg_age, scale=self.herbivore_age_std_dev, size=spawn_count)
                 self.herbivore_gestation_time_reqs[free_indeces] = np.random.normal(loc=self.herbivore_avg_gestation_time, scale=self.herbivore_gestation_time_std_dev, size=spawn_count)
+                
+                #brains:
                 parent_brain = self.herbivore_brains[parent_index]
                 child_brain = copy.deepcopy(parent_brain)
 
@@ -743,16 +756,17 @@ class World:
                 #calculate new colour based on similarity between parent and child brains:
                 brain_distance = calculate_brain_similarity(parent_brain, child_brain)
 
-                # possibility to add or delete a neuron in a hidden layer
-                sizes = child_brain.get_dim_sizes()
-                for dimension, index in zip(["fc1","fc2"],[0,1]):
-                    if np.random.uniform(low=0.0,high=1.0,size=1)[0] <= self.global_mutation_rate:
-                        child_brain = resize_layer_in_animal_brain(child_brain,
-                                                            layer=dimension,
-                                                            new_size=np.clip((sizes[index]+np.random.choice([-1,1])),a_min=1,a_max=20),
-                                                            init_std=self.weight_std_for_new_neurons)
-                        brain_distance += 0.3 # if we add or delete a neuron, we consider that a bigger mutation than just changing weights, so we add a fixed value to the brain distance to reflect that
-                
+                # 2. Mutate architecture (Dynamic layers & neurons!)
+                child_brain, structural_dist = mutate_brain_architecture(
+                    child_brain, 
+                    self.global_mutation_rate,
+                    init_std=self.weight_std_for_new_neurons,
+                    min_size = self.min_hidden_dim_size,
+                    max_size = self.max_hidden_dim_size
+                )
+
+                brain_distance += structural_dist
+
                 self.herbivore_brains[free_indeces] = child_brain
                 new_colour = self.herbivore_colours[parent_index] + np.random.normal(0, brain_distance*150, size=(spawn_count,3))
                 self.herbivore_colours[free_indeces] = np.clip(new_colour, 0, 255)
@@ -795,13 +809,24 @@ class World:
             indices_of_parents = np.random.choice(len(self.herbivore_top_fitnesses), size=spawn_count, p=relative_fitnesses)
             #this means that if a brain has higher fitness, it is more likely to be chosen as a parent for the new herbivores that are being spawned to replace the ones that died.
             self.herbivore_generations[free_indeces] = self.herbivore_top_generations[indices_of_parents]+1
+            
             for i, idx in enumerate(free_indeces):
                 parent_idx = indices_of_parents[i]
-                new_brain = copy.deepcopy(self.herbivore_top_brains[parent_idx])
+                parent_brain = self.herbivore_top_brains[parent_idx]
+                new_brain = copy.deepcopy(parent_brain)
                 new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+                brain_distance = calculate_brain_similarity(parent_brain, new_brain)
+                new_brain, structural_dist = mutate_brain_architecture(
+                    new_brain, 
+                    self.global_mutation_rate,
+                    init_std=self.weight_std_for_new_neurons,
+                    min_size = self.min_hidden_dim_size,
+                    max_size = self.max_hidden_dim_size
+                )
+
+                brain_distance += structural_dist
                 self.herbivore_brains[idx] = new_brain
                 #calculate new colour based on similarity between parent and child brains:
-                brain_distance = calculate_brain_similarity(self.herbivore_top_brains[parent_idx], new_brain)
                 new_colour = self.herbivore_top_colours[parent_idx] + np.random.normal(0, brain_distance*150, size=3)
                 self.herbivore_colours[idx] = np.clip(new_colour, 0, 255)
             
@@ -839,13 +864,23 @@ class World:
             indices_of_parents = np.random.choice(len(self.herbivore_new_archive_fitnesses), size=spawn_count_recent, p=relative_fitnesses)
             #this means that if a brain has higher fitness, it is more likely to be chosen as a parent for the new herbivores that are being spawned to replace the ones that died.
             self.herbivore_generations[free_indeces] = self.herbivore_new_archive_generations[indices_of_parents]+1
+            #brains:
             for i, idx in enumerate(free_indeces):
                 parent_idx = indices_of_parents[i]
-                new_brain = copy.deepcopy(self.herbivore_new_archive_brains[parent_idx])
+                parent_brain = self.herbivore_new_archive_brains[parent_idx]
+                new_brain = copy.deepcopy(parent_brain)
                 new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+                brain_distance = calculate_brain_similarity(parent_brain, new_brain)
+                new_brain, structural_dist = mutate_brain_architecture(
+                    new_brain, 
+                    self.global_mutation_rate,
+                    init_std=self.weight_std_for_new_neurons,
+                    min_size = self.min_hidden_dim_size,
+                    max_size = self.max_hidden_dim_size
+                )
+                brain_distance += structural_dist
                 self.herbivore_brains[idx] = new_brain
                 #calculate new colour based on similarity between parent and child brains:
-                brain_distance = calculate_brain_similarity(self.herbivore_new_archive_brains[parent_idx], new_brain)
                 new_colour = self.herbivore_new_archive_colours[parent_idx] + np.random.normal(0, brain_distance*150, size=3)
                 self.herbivore_colours[idx] = np.clip(new_colour, 0, 255)
 
@@ -962,13 +997,12 @@ class World:
         self.predator_nn_inputs[alive_indices,0:self.predator_num_external_infos] = output_from_perception_function
         self.predator_nn_inputs[alive_indices,self.predator_num_external_infos:self.predator_num_external_infos+2] = np.stack((1-(self.predator_satiety[alive_indices] / self.predator_max_satiety), self.predator_speeds[alive_indices] / self.max_speed), axis=1)
 
-    def predators_process_NN(self, dt, just_getting_stats_for_NN_visualisation = False):
+    def predators_process_NN(self, dt):
         alive_indices = np.where(self.alive_predator_array)[0]
-        if alive_indices.size == 0:
-            return
+        if alive_indices.size == 0: return
 
         # === Batch processing using precomputed nn_inputs ===
-        input_tensor = torch.from_numpy(self.predator_nn_inputs[alive_indices])  # shape (N_alive, 8)
+        input_tensor = torch.from_numpy(self.predator_nn_inputs[alive_indices])  # shape (N_alive, 6)
 
         # === Forward pass through each individual's brain ===
         outputs = []
@@ -976,24 +1010,16 @@ class World:
             brain = self.predator_brains[idx]
             if idx == self.selected_predator_index:
                 with torch.no_grad():
-                    output, h1, h2 = brain(
-                        input_tensor[i].unsqueeze(0),
-                        return_activations=True
-                    )
-
-                self.selected_predator_nn_hdim1 = h1.cpu().numpy()[0]
-                self.selected_predator_nn_hdim2 = h2.cpu().numpy()[0]
+                    output, activations = brain(input_tensor[i].unsqueeze(0), return_activations=True)
+                
+                # Store dynamic activations list safely for UI/Logging
+                self.selected_predator_nn_activations = [act.cpu().numpy()[0] for act in activations]
                 self.selected_predator_nn_output = output.cpu().numpy()[0]
-
                 output = output.numpy()[0]
-
             else:
-                with torch.no_grad():
+                with torch.no_grad(): # INDENT THIS
                     output = brain(input_tensor[i].unsqueeze(0), return_activations=False).numpy()[0]
             outputs.append(output)
-
-        if just_getting_stats_for_NN_visualisation == True : return
-
         outputs = np.array(outputs, dtype=np.float32)  # shape (N_alive, 2)
 
         # === assign outputs ===
@@ -1083,7 +1109,7 @@ class World:
         for i in reproducing_predator_indices:
             self.spawn_predator(1,parent_index=i)
 
-    def spawn_predator(self, how_many_to_spawn, parent_index=-1, random_res=False): #obama
+    def spawn_predator(self, how_many_to_spawn, parent_index=-1, random_res=False): 
         available_slots = np.sum(np.invert(self.alive_predator_array))
         spawn_count = min(how_many_to_spawn, available_slots)
 
@@ -1115,14 +1141,22 @@ class World:
                     self.predator_random_spawn_mask[free_indeces] = False
                 self.predator_life_expectancy[free_indeces] = np.random.normal(loc=self.predator_avg_age, scale=self.predator_age_std_dev, size=spawn_count)
                 self.predator_gestation_time_reqs[free_indeces] = np.random.normal(loc=self.predator_avg_gestation_time, scale=self.predator_gestation_time_std_dev, size=spawn_count)
+                
+                #brains:
                 for idx in free_indeces:
+                    # Generate a random initial layout: e.g., could be [], [8], [12, 6], etc.
+                    num_initial_layers = np.random.randint(0, 3) 
+                    random_dims = [
+                        np.random.randint(self.min_hidden_dim_size, self.max_hidden_dim_size + 1)
+                        for _ in range(num_initial_layers)
+                    ]
+                    
                     self.predator_brains[idx] = AnimalBrain(
-                        n_external_infos = self.predator_num_external_infos,
+                        n_external_infos=self.predator_num_external_infos,
                         n_self_infos=self.predator_self_infos,
-                        hidden_dim_1=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
-                        hidden_dim_2=np.random.randint(low=self.min_hidden_dim_size,high=self.max_hidden_dim_size,size=1)[0],
-                        initial_weight_std = self.weight_std_for_new_neurons
-                        )
+                        hidden_dims=random_dims,
+                        initial_weight_std=self.weight_std_for_new_neurons
+                    )
             
             else: #spawning from a parent
                 self.predator_offsping_count[parent_index] += 1
@@ -1145,23 +1179,26 @@ class World:
                 self.predator_life_expectancy[free_indeces] = np.random.normal(loc=self.predator_avg_age, scale=self.predator_age_std_dev, size=spawn_count)
                 self.predator_gestation_time_reqs[free_indeces] = np.random.normal(loc=self.predator_avg_gestation_time, scale=self.predator_gestation_time_std_dev, size=spawn_count)
                 
-                #brains:
+                #brains: 
                 parent_brain = self.predator_brains[parent_index]
                 child_brain = copy.deepcopy(parent_brain)
+
                 # mutate weights:
                 child_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+
                 #calculate new colour based on similarity between parent and child brains:
                 brain_distance = calculate_brain_similarity(parent_brain, child_brain)
-                # possibility to add or delete a neuron in a hidden layer
-                sizes = child_brain.get_dim_sizes()
-                for dimension, index in zip(["fc1","fc2"],[0,1]):
-                    if np.random.uniform(low=0.0,high=1.0,size=1)[0] <= self.global_mutation_rate:
-                        child_brain = resize_layer_in_animal_brain(child_brain,
-                                                            layer=dimension,
-                                                            new_size=np.clip((sizes[index]+np.random.choice([-1,1])),a_min=1,a_max=20),
-                                                            init_std=self.weight_std_for_new_neurons)
-                        brain_distance += 0.3 # if we add or delete a neuron, we consider that a bigger mutation than just changing weights, so we add a fixed value to the brain distance to reflect that
-                
+
+                # 2. Mutate architecture (Dynamic layers & neurons!)
+                child_brain, structural_dist = mutate_brain_architecture(
+                    child_brain, 
+                    self.global_mutation_rate,
+                    init_std=self.weight_std_for_new_neurons,
+                    min_size = self.min_hidden_dim_size,
+                    max_size = self.max_hidden_dim_size
+                )
+                brain_distance += structural_dist
+
                 self.predator_brains[free_indeces] = child_brain
                 new_colour = self.predator_colours[parent_index] + np.random.normal(0, brain_distance*150, size=(spawn_count,3))
                 self.predator_colours[free_indeces] = np.clip(new_colour, 0, 255)
@@ -1207,11 +1244,21 @@ class World:
             self.predator_generations[free_indeces] = self.predator_top_generations[indices_of_parents]+1
             for i, idx in enumerate(free_indeces):
                 parent_idx = indices_of_parents[i]
-                new_brain = copy.deepcopy(self.predator_top_brains[parent_idx])
+                parent_brain = self.predator_top_brains[parent_idx]
+                new_brain = copy.deepcopy(parent_brain)
                 new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+                brain_distance = calculate_brain_similarity(parent_brain, new_brain)
+                new_brain, structural_dist = mutate_brain_architecture(
+                    new_brain, 
+                    self.global_mutation_rate,
+                    init_std=self.weight_std_for_new_neurons,
+                    min_size = self.min_hidden_dim_size,
+                    max_size = self.max_hidden_dim_size
+                )
+
+                brain_distance += structural_dist
                 self.predator_brains[idx] = new_brain
                 #calculate new colour based on similarity between parent and child brains:
-                brain_distance = calculate_brain_similarity(self.predator_top_brains[parent_idx], new_brain)
                 new_colour = self.predator_top_colours[parent_idx] + np.random.normal(0, brain_distance*150, size=3)
                 self.predator_colours[idx] = np.clip(new_colour, 0, 255)
             
@@ -1249,16 +1296,25 @@ class World:
             indices_of_parents = np.random.choice(len(self.predator_new_archive_fitnesses), size=spawn_count_recent, p=relative_fitnesses)
             #this means that if a brain has higher fitness, it is more likely to be chosen as a parent for the new predators that are being spawned to replace the ones that died.
             self.predator_generations[free_indeces] = self.predator_new_archive_generations[indices_of_parents]+1
+            #brains:
             for i, idx in enumerate(free_indeces):
                 parent_idx = indices_of_parents[i]
-                new_brain = copy.deepcopy(self.predator_new_archive_brains[parent_idx])
+                parent_brain = self.predator_new_archive_brains[parent_idx]
+                new_brain = copy.deepcopy(parent_brain)
                 new_brain.mutate(self.global_mutation_rate, self.global_mutation_strength)
+                brain_distance = calculate_brain_similarity(parent_brain, new_brain)
+                new_brain, structural_dist = mutate_brain_architecture(
+                    new_brain, 
+                    self.global_mutation_rate,
+                    init_std=self.weight_std_for_new_neurons,
+                    min_size = self.min_hidden_dim_size,
+                    max_size = self.max_hidden_dim_size
+                )
+                brain_distance += structural_dist
                 self.predator_brains[idx] = new_brain
                 #calculate new colour based on similarity between parent and child brains:
-                brain_distance = calculate_brain_similarity(self.predator_new_archive_brains[parent_idx], new_brain)
                 new_colour = self.predator_new_archive_colours[parent_idx] + np.random.normal(0, brain_distance*150, size=3)
                 self.predator_colours[idx] = np.clip(new_colour, 0, 255)
-
 
         # 3. random fresh spawns:
         #this can be handled without using this function just by calling spawn_predators(to_res,parent_idx=-1)

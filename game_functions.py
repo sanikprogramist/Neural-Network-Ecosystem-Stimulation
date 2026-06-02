@@ -185,121 +185,116 @@ def calculate_brain_similarity(brain_1: AnimalBrain, brain_2: AnimalBrain):
 
     return np.sqrt(total_diff / total_params) 
 
-def resize_layer_in_animal_brain(
+def mutate_brain_architecture(
     brain: AnimalBrain,
-    layer: str,
-    new_size: int,
-    init_std: float = 0.1,
-) -> AnimalBrain:
+    global_mutation_rate: float,
+    min_size: int = 1,
+    max_size: int = 20,
+    init_std: float = 0.1
+) -> tuple[AnimalBrain, float]:
     """
-    Returns a new AnimalBrain with the specified layer resized.
-    When shrinking, neurons to remove are chosen randomly.
-    When growing, new neurons are randomly initialised.
-    The corresponding input columns in the next layer are updated to match.
+    Handles neuron addition/subtraction, layer addition, and layer deletion.
+    Guarantees that neuron deletion targets random indices safely without index crashes.
     """
-    input_dim = brain.fc1.in_features
-    old_h1    = brain.fc1.out_features
-    old_h2    = brain.fc2.out_features
+    hidden_dims = list(brain.get_dim_sizes())
+    structural_change_score = 0.0
+    
+    # 1. Determine New Dimensions and explicitly save lists of surviving indices
+    # We keep track of the *exact* original indices that survived for each layer
+    surviving_neuron_maps = []
+    new_dims = []
+    
+    for dim in hidden_dims:
+        if np.random.rand() <= global_mutation_rate:
+            change = np.random.choice([-1, 1])
+            new_dim = dim + change
+            structural_change_score += 0.15
+            
+            if new_dim >= min_size:
+                final_dim = min(new_dim, max_size)
+                new_dims.append(final_dim)
+                
+                if final_dim < dim:
+                    # Randomly choose which indices survive this layer's shrinking
+                    indices_to_keep = np.sort(np.random.choice(dim, final_dim, replace=False))
+                    surviving_neuron_maps.append(indices_to_keep)
+                else:
+                    # Grew or stayed same -> all original indices survive
+                    surviving_neuron_maps.append(np.arange(dim))
+            else:
+                structural_change_score += 0.15 #if layer deleted
+        else:
+            new_dims.append(dim)
+            surviving_neuron_maps.append(np.arange(dim))
+            
+    # 2. Randomly Mutate Layer Count (Sprouting a brand new layer)
+    if np.random.rand() <= (global_mutation_rate): 
+        new_dims.append(np.random.randint(2, 6))
+        surviving_neuron_maps.append(np.arange(new_dims[-1]))
+        structural_change_score += 0.3
 
-    new_h1 = new_size if layer == "fc1" else old_h1
-    new_h2 = new_size if layer == "fc2" else old_h2
-
-    if layer not in ("fc1", "fc2"):
-        raise ValueError("Layer must be 'fc1' or 'fc2'")
-
+    # Create the new shell brain architecture
     new_brain = AnimalBrain(
-        n_external_infos=input_dim,
-        n_self_infos=0,
-        hidden_dim_1=new_h1,
-        hidden_dim_2=new_h2
+        n_external_infos=brain.input_dim,
+        n_self_infos=0, 
+        hidden_dims=new_dims,
+        initial_weight_std=init_std
     )
-
+    
+    # 3. Transfer Weights step-by-step
     with torch.no_grad():
-
-        # --- Which neurons survive? ---
-        # keep_h1: indices of fc1 output neurons to keep (relevant when fc1 shrinks)
-        # keep_h2: indices of fc2 output neurons to keep (relevant when fc2 shrinks)
-
-        if new_h1 < old_h1:
-            keep_h1 = np.sort(np.random.choice(old_h1, new_h1, replace=False))
-        else:
-            keep_h1 = np.arange(old_h1)
-
-        if new_h2 < old_h2:
-            keep_h2 = np.sort(np.random.choice(old_h2, new_h2, replace=False))
-        else:
-            keep_h2 = np.arange(old_h2)
-
-        # ── fc1 ─────────────────────────────────────────────────────────────
-        # weight shape: (h1, input_dim)  — rows = output neurons
-
-        old_w = brain.fc1.weight.data
-        if new_h1 <= old_h1:
-            new_brain.fc1.weight.data[:, :] = old_w[keep_h1, :]
-        else:
-            # Growing: copy all old rows, init new rows
-            new_brain.fc1.weight.data[:old_h1, :] = old_w
-            nn.init.normal_(new_brain.fc1.weight.data[old_h1:, :], std=init_std)
-
-        # bias shape: (h1,) — same indexing as rows
-        if brain.fc1.bias is not None:
-            old_b = brain.fc1.bias.data
-            if new_h1 <= old_h1:
-                new_brain.fc1.bias.data[:] = old_b[keep_h1]
-            else:
-                new_brain.fc1.bias.data[:old_h1] = old_b
-                nn.init.normal_(new_brain.fc1.bias.data[old_h1:], std=init_std)
-
-        # ── fc2 ─────────────────────────────────────────────────────────────
-        # weight shape: (h2, h1) — rows = output neurons, cols = inputs from fc1
-
-        old_w = brain.fc2.weight.data  # (old_h2, old_h1)
-
-        # Step 1: trim/expand columns to match new fc1 output size
-        if new_h1 <= old_h1:
-            old_w = old_w[:, keep_h1]          # (old_h2, new_h1)
-        # if fc1 grew, new columns will be inited below
-
-        # Step 2: trim/expand rows for fc2 resize
-        min_h2     = min(old_h2, new_h2)
-        min_h1_cols = min(old_h1, new_h1)
-
-        if new_h2 <= old_h2:
-            new_brain.fc2.weight.data[:, :min_h1_cols] = old_w[keep_h2, :]
-        else:
-            new_brain.fc2.weight.data[:old_h2, :min_h1_cols] = old_w
-            nn.init.normal_(new_brain.fc2.weight.data[old_h2:, :min_h1_cols], std=init_std)
-
-        # If fc1 grew: init the new input columns in fc2
-        if new_h1 > old_h1:
-            nn.init.normal_(new_brain.fc2.weight.data[:min_h2, old_h1:], std=init_std)
-
-
-        # bias shape: (h2,)
-        if brain.fc2.bias is not None:
-            old_b = brain.fc2.bias.data
-            if new_h2 <= old_h2:
-                new_brain.fc2.bias.data[:] = old_b[keep_h2]
-            else:
-                new_brain.fc2.bias.data[:old_h2] = old_b
-                nn.init.normal_(new_brain.fc2.bias.data[old_h2:], std=init_std)
-
-        # ── out ──────────────────────────────────────────────────────────────
-        # weight shape: (output_dim=2, h2) — cols = inputs from fc2
-
-        old_w = brain.out.weight.data  # (2, old_h2)
-
-        if new_h2 <= old_h2:
-            new_brain.out.weight.data[:, :] = old_w[:, keep_h2]
-        else:
-            new_brain.out.weight.data[:, :old_h2] = old_w
-            nn.init.normal_(new_brain.out.weight.data[:, old_h2:], std=init_std)
-
-        # bias shape: (output_dim=2,) — always same size, always copy directly
-        if brain.out.bias is not None:
-            new_brain.out.bias.data[:] = brain.out.bias.data
-
-    return new_brain
+        old_layers = list(brain.layers)
+        new_layers = list(new_brain.layers)
+        
+        # We will match the input/output sizes layer by layer
+        # 'prev_keep_cols' keeps track of which neurons survived the *previous* layer's structural changes
+        prev_keep_cols = np.arange(brain.input_dim) 
+        
+        # Process all hidden layers that can be matched up
+        num_hidden_to_copy = min(len(old_layers), len(new_layers))
+        for i in range(num_hidden_to_copy):
+            old_l = old_layers[i]
+            new_l = new_layers[i]
+            
+            # Rows = output neurons of current layer
+            current_keep_rows = surviving_neuron_maps[i]
+            
+            # Safeguard limits so we never grab slices larger than what physically exists in the new/old shapes
+            max_rows = min(len(current_keep_rows), old_l.weight.shape[0], new_l.weight.shape[0])
+            max_cols = min(len(prev_keep_cols), old_l.weight.shape[1], new_l.weight.shape[1])
+            
+            selected_rows = current_keep_rows[:max_rows]
+            selected_cols = prev_keep_cols[:max_cols]
+            
+            # Map the checkerboard matrix indices safely
+            grid_indices = np.ix_(selected_rows, selected_cols)
+            new_l.weight[:max_rows, :max_cols] = old_l.weight[grid_indices]
+            
+            if new_l.bias is not None and old_l.bias is not None:
+                new_l.bias[:max_rows] = old_l.bias[selected_rows]
+                
+            # Update history for the next layer's inputs
+            prev_keep_cols = current_keep_rows
+            
+        # 4. Handle the final output connection layer ('brain.out')
+        # This prevents the exact bug you ran into when layers shrink or disappear!
+        old_out = brain.out
+        new_out = new_brain.out
+        
+        # The output layer always keeps both of its output dimensions (speed, turning)
+        max_rows = min(old_out.weight.shape[0], new_out.weight.shape[0]) # usually 2
+        max_cols = min(len(prev_keep_cols), old_out.weight.shape[1], new_out.weight.shape[1])
+        
+        selected_cols = prev_keep_cols[:max_cols]
+        selected_rows = np.arange(max_rows)
+        
+        grid_indices = np.ix_(selected_rows, selected_cols)
+        new_out.weight[:max_rows, :max_cols] = old_out.weight[grid_indices]
+        
+        if new_out.bias is not None and old_out.bias is not None:
+            new_out.bias[:max_rows] = old_out.bias[:max_rows]
+                
+    return new_brain, structural_change_score
 
 def to_json_compatible(obj):
         # Recursively convert numpy types and arrays to native Python types

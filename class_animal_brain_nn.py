@@ -8,23 +8,20 @@ class AnimalBrain(nn.Module):
     Neural controller for an artificial animal agent in an evolving ecosystem.
 
     This model takes as input a perception vector derived from the animal's
-    ray-based environment sensing system. Each ray provides information such as
-    distance to food, walls, or other animals. The network outputs two continuous
-    values representing:
+    vision function (currently its distance and angle to every detectable object type (food, predator, etc)).
+    The network outputs two continuous values representing:
         1. Forward movement speed
         2. Angular turning rate
 
-    The AnimalBrain is intentionally small, enabling efficient simulation of
-    hundreds or thousands of agents evolving through mutation. It is designed
-    for neuro-evolution rather than gradient-based learning.
+    It is designed for neuro-evolution rather than gradient-based learning.
+    It is not a true NEAT algorithm due to the absence of skip connections, but it has dynamic topology augmentation.
     """
 
     def __init__(
         self, 
         n_external_infos: int,
         n_self_infos: int,
-        hidden_dim_1: int = 12,
-        hidden_dim_2: int = 12,
+        hidden_dims: list = [],  # Pass a list like [12, 12, 18] or [6] or []
         initial_weight_std: float = 0.1,
         initial_bias_std: float = 0.05
     ):
@@ -37,26 +34,15 @@ class AnimalBrain(nn.Module):
         n_self_infos : int
             Number of self-related features (e.g., speed, satiety).
 
-        n_types_of_info_about_each_object : int, optional
-            How many distinct features are captured per detected object, eg distance, angle to it
+        hidden_dims : list
+            Dimensionality of the hidden layers. 
+            Defaults to no hidden layers (a default input - output connection)
 
-
-        hidden_dim_1 : int, optional
-            Dimensionality of the first hidden layer. Increasing this expands
-            representational capacity at the cost of computation.
-
-        hidden_dim_2 : int, optional
-            Dimensionality of the second hidden layer.
-
-        Notes
-            (e.g., food density, predator presence). Defaults to 2.
-
-        hidden_dim_1 : int, optional
-            Dimensionality of the first hidden layer. Increasing this expands
-            representational capacity at the cost of computation.
-
-        hidden_dim_2 : int, optional
-            Dimensionality of the second hidden layer.
+        initial_weight_std: float
+            standard deviation of newly initialised weights
+        
+        initial_bias_std: float
+            standard deviation of newly initialised biases
 
         Notes
         -----
@@ -67,27 +53,33 @@ class AnimalBrain(nn.Module):
         """
 
         super().__init__()
-
-        # Calculate number of input features from perception and agent state.
-        input_dim = n_external_infos + n_self_infos
-
+        self.input_dim = n_external_infos + n_self_infos
         # Output: [forward_speed, angular_velocity]
-        output_dim = 2
+        self.output_dim = 2
 
-        # A fully-connected architecture
-        self.fc1 = nn.Linear(input_dim, hidden_dim_1, bias=True)
-        self.fc2 = nn.Linear(hidden_dim_1, hidden_dim_2, bias=True)
-        self.out = nn.Linear(hidden_dim_2, output_dim, bias=True)
+        self.hidden_dims = hidden_dims
 
-        # === Custom weight initialization ===
-        nn.init.normal_(self.fc1.weight, mean=0, std=initial_weight_std)
-        nn.init.normal_(self.fc2.weight, mean=0, std=initial_weight_std)
-        nn.init.normal_(self.out.weight, mean=0, std=initial_weight_std)
+        # Build layers dynamically using nn.ModuleList
+        self.layers = nn.ModuleList()
+        prev_dim = self.input_dim
+        for h_dim in self.hidden_dims:
+            self.layers.append(nn.Linear(prev_dim, h_dim, bias=True))
+            prev_dim = h_dim
+            
+        # Final output layer
+        self.out = nn.Linear(prev_dim, self.output_dim, bias=True)
 
-        # === Custom bias initialization ===
-        nn.init.normal_(self.fc1.bias, mean=0, std=initial_bias_std)
-        nn.init.normal_(self.fc2.bias, mean=0, std=initial_bias_std)
-        nn.init.normal_(self.out.bias, mean=0, std=initial_bias_std)
+        # Custom weight and bias initialization
+        self.init_weights(initial_weight_std, initial_bias_std)
+
+    def init_weights(self, weight_std, bias_std):
+        with torch.no_grad():
+            for layer in self.layers:
+                nn.init.normal_(layer.weight, mean=0, std=weight_std)
+                nn.init.normal_(layer.bias, mean=0, std=bias_std)
+            nn.init.normal_(self.out.weight, mean=0, std=weight_std)
+            nn.init.normal_(self.out.bias, mean=0, std=bias_std)
+
 
     def forward(self, x: torch.Tensor, return_activations: bool = False) -> torch.Tensor:
         """
@@ -107,11 +99,20 @@ class AnimalBrain(nn.Module):
         torch.Tensor
             Movement command tensor [speed, angular_speed]
         """
-        h1 = F.relu(self.fc1(x))
-        h2 = F.relu(self.fc2(h1))
-        out = torch.tanh(self.out(h2))
+    def forward(self, x: torch.Tensor, return_activations: bool = False):
+        activations = []
+        h = x
+        
+        # Pass sequentially through all hidden layers
+        for layer in self.layers:
+            h = F.relu(layer(h))
+            if return_activations:
+                activations.append(h)
+                
+        out = torch.tanh(self.out(h))
+        
         if return_activations:
-            return out, h1, h2
+            return out, activations
         return out
 
     def mutate(self, mutation_rate: float, mutation_strength: float) -> None:
@@ -146,23 +147,13 @@ class AnimalBrain(nn.Module):
         (int, int)
             Tuple -> (size of first hidden layer, size of second hidden layer)
         """
-        return self.fc1.out_features, self.fc2.out_features
+        return list(self.hidden_dims)
 
     def get_network_weights(self):
-        """
-        Serialize network weights for visualization.
-
-        Returns
-        -------
-        dict
-            Contains weight matrices for each layer in list format
-        """
-        return {
-            "input_to_hidden1": self.fc1.weight.data.cpu().numpy().tolist(),
-            "hidden1_to_hidden2": self.fc2.weight.data.cpu().numpy().tolist(),
-            "hidden2_to_output": self.out.weight.data.cpu().numpy().tolist(),
-            "input_dim": self.fc1.in_features,
-            "hidden1_dim": self.fc1.out_features,
-            "hidden2_dim": self.fc2.out_features,
-            "output_dim": self.out.out_features
-        }
+        # Dynamically serializes whatever structural state exists
+        data = {"input_dim": self.input_dim, "output_dim": self.output_dim}
+        for i, layer in enumerate(self.layers):
+            data[f"layer_{i}_weights"] = layer.weight.data.cpu().numpy().tolist()
+        data["out_weights"] = self.out.weight.data.cpu().numpy().tolist()
+        data["hidden_dims"] = self.hidden_dims
+        return data
