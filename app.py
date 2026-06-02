@@ -19,9 +19,9 @@ def serve_index():
     return FileResponse(static_dir / "index.html")
 
 world = World()
-world.spawn_food(200)
-world.spawn_herbivore(200)
-world.spawn_predator(50)
+world.spawn_food(world.starting_plant)
+world.spawn_herbivore(world.starting_herbivore)
+world.spawn_predator(world.starting_predator)
 
 
 class StepRequest(BaseModel):

@@ -101,7 +101,7 @@
 
     #chartPanel {
         background: white !important;
-        max-width: 600px; /* graph width Total grid width (800 + 450 + 24 gap) */
+        max-width: 1200px; /* graph width Total grid width (800 + 450 + 24 gap) */
         padding: 16px;
         margin-top: 16px;
     }
@@ -197,7 +197,14 @@
         <div id="status">Loading...</div>
 
         <div id="chartPanel">
-            <canvas id="populationChart"></canvas>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <canvas id="populationChart"></canvas>
+                </div>
+                <div>
+                    <canvas id="agePyramidChart"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 

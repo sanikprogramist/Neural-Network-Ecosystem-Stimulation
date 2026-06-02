@@ -13,9 +13,14 @@ from class_animal_brain_nn import *
 # 1. fitness is exploitable but i dont know how to fix it
 # 2. herbivore reproduction timer is going up even though pop is at max - not sure if this is a problem
 # 14. start them out with 1 hidden layer, then they can evolve to have more. if they want. More flexibility
-# 15. more graphs
+# 15. more graphs?
 # 17. some settings between predators and herbivores dont match
-# 18. neural network doesnt load when select animal while paused for first time
+# 18. save all chart data from the whole runtime
+# 19. brain designer tab? first need more flexible brain architecture
+# 21. would be nice to connect animal sizes to settings
+
+#since last commit:
+# - training predators
 
 class World:
 
@@ -40,13 +45,14 @@ class World:
         self.weight_std_for_new_neurons = 0.35 #setting exists
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
 
+        self.enable_training_predators = True #ADD enable or disable always spawning a random "training" predator when there are no predators left, to exert selection pressure on herbivores even in the absence of predators. 
         self.starting_herbivore = 100 #setting exists
         self.starting_predator = 20 #setting exists
         self.starting_plant = 100 #setting exists
 
         #plants
-        self.max_plant = 300 #setting exists
-        self.plant_size = 6 
+        self.max_plant = 250 #setting exists
+        self.plant_size = 5  
         self.plant_nutrition_value = 0.85 #setting exists
         self.plant_regrowth_power = 1.0 #setting exists
         self.plant_random_spawn_interval = 1 / self.plant_regrowth_power #2.2 originally
@@ -55,8 +61,8 @@ class World:
         #predators # we dont add predator settings rn because their mechanics are very outdated
         self.max_predator = 1000 #setting exists
         self.predator_size = 5 
-        self.predator_satiety_loss_factor = 0.005 
-        self.predator_max_satiety = 2 
+        self.predator_satiety_loss_factor = 0.005 #ADD
+        self.predator_max_satiety = 2 #ADD
         self.predator_avg_gestation_time = 32 #setting exists
         self.predator_gestation_time_std_dev = 5 #setting exists
         self.predator_reproduction_minimum_satiety = 1.0 #setting exists
@@ -67,7 +73,6 @@ class World:
         self.predator_avg_age = 120 #setting exists
         self.predator_age_std_dev = 7 #setting exists
         self.predator_min_age_to_reproduce = 24 #setting exists
-        
 
         #herbivores
         self.max_herbivore = 2000 #setting exists
@@ -360,10 +365,17 @@ class World:
     def get_chart_data(self):
         #we could just get this from world state, but this will make it easier to add more charts later:
         return {
+            #for population chart:
             "world_time": float(self.world_time),
             "current_plant": int(np.sum(self.alive_plant_array)),
             "current_herbivore": int(np.sum(self.alive_herbivore_array)),
             "current_predator": int(np.sum(self.alive_predator_array)),
+
+            #for population pyramid:
+            "alive_herbivore_ages": self.herbivore_ages[self.alive_herbivore_array].tolist(),
+            "alive_predator_ages": self.predator_ages[self.alive_predator_array].tolist(),
+            "herbivore_maturity_age": int(self.herbivore_reproduction_minimum_satiety),
+            "predator_maturity_age": int(self.predator_reproduction_minimum_satiety),
         }
     
     def debug_kill(self):
@@ -883,26 +895,31 @@ class World:
     def predators_check_resurrect(self, dt):
         if (np.sum(self.alive_predator_array) == 0) and (np.sum(self.alive_herbivore_array) > self.predators_resurrect_after_herbivores_reach):
             self.start_resurrecting_predators = True
+        elif (np.sum(self.alive_predator_array) == 0) and self.enable_training_predators:
+            #add random "training predators" to exert selection pressure:
+            self.spawn_predator(np.random.randint(low=1, high=4), parent_index=-1, random_res=True)
         if not self.start_resurrecting_predators:
             return
 
+        # ---- Gradual resurrection:
         # every 5 seconds, spawn a random amount between 1 and 5 until that number reaches the res count
         # then spawn random ones every 5 seconds until it reaches the res count+random res count
+        # this is so that there is no crazy apocalyptic event happening suddenly
         self.predator_resurrection_delay_counter += dt * self.world_speed_multiplier
         if self.predator_resurrection_delay_counter < 5.0:
             return
         
         self.predator_resurrection_delay_counter = 0.0
         if self.already_resurrected_predators <= self.predator_resurrection_count:
-            to_res = np.random.randint(low=1, high=6)
+            to_res = np.random.randint(low=1, high=4)
             self.resurrect_predators(to_res, 0)
             self.already_resurrected_predators += to_res
         elif self.already_resurrected_predators <= self.predator_resurrection_count + self.predator_resurrection_recent_count: 
-            to_res = np.random.randint(low=1, high=6)
+            to_res = np.random.randint(low=1, high=4)
             self.resurrect_predators(0, to_res)
             self.already_resurrected_predators += to_res
         elif self.already_resurrected_predators <= self.predator_resurrection_count + self.predator_resurrection_recent_count + self.predator_resurrection_random_count: 
-            to_res = np.random.randint(low=1, high=6)
+            to_res = np.random.randint(low=1, high=4)
             self.spawn_predator(to_res, parent_index=-1, random_res=True)
             self.already_resurrected_predators += to_res
         else:

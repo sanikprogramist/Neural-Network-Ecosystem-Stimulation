@@ -8,17 +8,19 @@ const toggleButton = document.getElementById('toggleButton');
 const stepButton = document.getElementById('stepButton');
 const saveButton = document.getElementById('saveButton');
 const loadButton = document.getElementById('loadButton');
-const chartCtx = document.getElementById('populationChart').getContext('2d');
+const popChartCtx = document.getElementById('populationChart').getContext('2d');
+const agePyramidCtx = document.getElementById('agePyramidChart').getContext('2d');
 const killButton = document.getElementById('killButton');
 
 let running = false;
 let lastState = null;
 let lastTickTime = performance.now();
 let neuralNetPulsesEnabled = true;
-let chartInterval = null;
+let popChartInterval = null;
+let agePyramidInterval = null;
 
 //charts
-const populationChart = new Chart(chartCtx, {
+const populationChart = new Chart(popChartCtx, {
     type: 'line',
     data: {
         labels: [],
@@ -26,14 +28,20 @@ const populationChart = new Chart(chartCtx, {
             {
                 label: 'Plants',
                 data: [],
+                borderColor: '#6082e7',      // Blue
+                fill: false
             },
             {
                 label: 'Herbivores',
                 data: [],
+                borderColor: 'rgba(76, 175, 80, 1)',      // Green
+                fill: false
             },
             {
                 label: 'Predators',
                 data: [],
+                borderColor: '#b34700',        // Orange
+                fill: false
             }
         ]
     },
@@ -53,6 +61,112 @@ const populationChart = new Chart(chartCtx, {
                     text: 'Population'
                 },
                 beginAtZero: true
+            }
+        }
+    }
+});
+
+const agePyramidChart = new Chart(agePyramidCtx, {
+    type: 'bar',
+    data: {
+        labels: ['100+', '80-100', '60-80', '40-60', '20-40', '0-20'],
+        datasets: [
+            {
+                label: 'Herbivores',
+                data: [0, 0, 0, 0, 0, 0],
+                backgroundColor: 'rgba(76, 175, 80, 0.85)',
+                borderColor: 'rgba(76, 175, 80, 1)',
+                borderWidth: 0.5,
+                borderRadius: 0,
+                barPercentage: 1.0,      // Use full category width
+                categoryPercentage: 1.0,  // Use full category width
+                stack: 'population'
+            },
+            {
+                label: 'Predators',
+                data: [0, 0, 0, 0, 0, 0],
+                backgroundColor: '#b34700',
+                borderColor: '#b34700',
+                borderWidth: 0.5,
+                borderRadius: 0,
+                barPercentage: 1.0,      // Use full category width
+                categoryPercentage: 1.0,  // Use full category width
+                stack: 'population'
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        animation: false,
+        indexAxis: 'y',
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const value = Math.abs(context.raw);
+                        return `${context.dataset.label}: ${value} animals`;
+                    }
+                }
+            },
+            legend: {
+                position: 'top',
+                labels: {
+                    font: { size: 12, weight: 'bold' },
+                    usePointStyle: true,
+                    boxWidth: 12
+                }
+            },
+            title: {
+                display: true,
+                text: '👥 Population Pyramid',
+                font: { size: 14, weight: 'bold' },
+                padding: { bottom: 15 }
+            }
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: '← Herbivores    |    Predators →',
+                    font: { weight: 'bold', size: 11 }
+                },
+                grid: {
+                    drawBorder: true,
+                    color: 'rgba(0, 0, 0, 0.08)'
+                },
+                ticks: {
+                    callback: function(value) {
+                        return Math.abs(value);
+                    },
+                    stepSize: 20,
+                    font: { size: 10 }
+                },
+                stacked: false
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Age Group (seconds)',
+                    font: { weight: 'bold' }
+                },
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    font: { size: 11 },
+                    stepSize: 1
+                },
+                stacked: false
+            }
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index'
+        },
+        elements: {
+            bar: {
+                borderSkipped: false
             }
         }
     }
@@ -396,17 +510,18 @@ function worldFromCanvas(screenX, screenY, worldWidth, worldHeight) {
     };
 }
 
-let chart_last_time = -1;
-
-async function updateChart() {
+async function updatePopulationChart() {
     try {
+        const response = await fetch('/chart');
+        const data = await response.json();
+
         populationChart.data.labels.push(data.world_time.toFixed(1));
         populationChart.data.datasets[0].data.push(data.current_plant);
         populationChart.data.datasets[1].data.push(data.current_herbivore);
         populationChart.data.datasets[2].data.push(data.current_predator);
 
         // keep only latest n points
-        const maxPoints = 150;
+        const maxPoints = 150; 
 
         if (populationChart.data.labels.length > maxPoints) {
             populationChart.data.labels.shift();
@@ -416,11 +531,64 @@ async function updateChart() {
             });
         }
         
-        chart_last_time = data.world_time;
         populationChart.update();
 
     } catch (err) {
         console.error('Chart update failed:', err);
+    }
+}
+
+async function updateAgePyramid() {
+    try {
+        const response = await fetch('/chart');
+        const data = await response.json();
+        
+        // Define age group boundaries (youngest first for data, but chart will reverse labels)
+        const ageGroups = [0, 20, 40, 60, 80, 100, Infinity];
+        
+        // Bin herbivore ages (these will become negative for left side)
+        const herbivoreCounts = new Array(ageGroups.length - 1).fill(0);
+        const herbivoreAges = data.alive_herbivore_ages || [];
+        
+        herbivoreAges.forEach(age => {
+            for (let i = 0; i < ageGroups.length - 1; i++) {
+                if (age >= ageGroups[i] && age < ageGroups[i + 1]) {
+                    herbivoreCounts[i]++;
+                    break;
+                }
+            }
+        });
+        
+        // Bin predator ages (positive for right side)
+        const predatorCounts = new Array(ageGroups.length - 1).fill(0);
+        const predatorAges = data.alive_predator_ages || [];
+        
+        predatorAges.forEach(age => {
+            for (let i = 0; i < ageGroups.length - 1; i++) {
+                if (age >= ageGroups[i] && age < ageGroups[i + 1]) {
+                    predatorCounts[i]++;
+                    break;
+                }
+            }
+        });
+        
+        // Reverse the order so oldest is on top, and make herbivore counts negative
+        const reversedHerbivoreCounts = herbivoreCounts.reverse().map(count => -count);
+        const reversedPredatorCounts = predatorCounts.reverse();
+        
+        // Update the chart
+        agePyramidChart.data.datasets[0].data = reversedHerbivoreCounts;
+        agePyramidChart.data.datasets[1].data = reversedPredatorCounts;
+        
+        // Update x-axis range
+        const maxValue = Math.max(...reversedHerbivoreCounts.map(Math.abs), ...reversedPredatorCounts);
+        agePyramidChart.options.scales.x.max = maxValue;
+        agePyramidChart.options.scales.x.min = -maxValue;
+        
+        agePyramidChart.update();
+        
+    } catch (err) {
+        console.error('Age pyramid update failed:', err);
     }
 }
 
@@ -489,12 +657,8 @@ function drawLiveNeuralNetwork(nn) {
     if (!nn.inputs || !nn.hidden_dim_1 || !nn.hidden_dim_2 || !nn.output) {
         console.log(nn)
         networkCtx.clearRect(0, 0, w, h);
-        networkCtx.fillStyle = '#f5f7fb';
-        networkCtx.fillRect(0, 0, w, h);
-        networkCtx.fillStyle = '#111827';
-        networkCtx.font = '14px sans-serif';
         networkCtx.textAlign = 'center';
-        networkCtx.fillText('Initializing neural network...', w/2, h/2);
+        networkCtx.fillText("Invalid neural network... This really shouldn't be happening", w/2, h/2);
         return;
     }
     
@@ -807,7 +971,6 @@ restartSettingsButton.addEventListener('click', async () => {
         const result = await response.json();
         console.log(result.message);
 
-        chart_last_time = -1;
         populationChart.data.labels = [];
         populationChart.data.datasets.forEach(d => d.data = []);
         populationChart.update();
@@ -995,9 +1158,11 @@ window.addEventListener('load', async () => {
 });
 
 function stopChartUpdates() {
-    if (chartInterval) {
-        clearInterval(chartInterval);
-        chartInterval = null;
+    if (popChartInterval) {
+        clearInterval(popChartInterval);
+        clearInterval(agePyramidInterval);
+        popChartInterval = null;
+        agePyramidInterval = null;
         console.log('Chart updates stopped');
     } else {
         console.log("Trying to stop chart interval although it is already stopped")
@@ -1006,8 +1171,9 @@ function stopChartUpdates() {
 
 // To restart it:
 function startChartUpdates() {
-    if (!chartInterval) {
-        chartInterval = setInterval(updateChart, 3000);
+    if (!popChartInterval) {
+        popChartInterval = setInterval(updatePopulationChart, 3000);
+        agePyramidInterval = setInterval(updateAgePyramid, 3000);
         console.log('Chart updates started');
     } else {
         console.log("Trying to start chart interval although it is already running")
