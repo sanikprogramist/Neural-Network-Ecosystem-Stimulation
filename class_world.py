@@ -15,9 +15,12 @@ from class_animal_brain_nn import *
 # 23. may be too complicated - skip connections - for a real NEAT lagorithm
 # 24. new chart - brain complexity
 # 25. replace speed as an input.
+# 26. before brain designer tab - save/load brain pickles and inject them into existing animals. maybe even spawn new animals button 
+
+
 
 #since last commit:
-# age pyramid constant scale
+# fixed resurrect bug
 
 
 class World:
@@ -830,8 +833,9 @@ class World:
         # 2. from recent archive:
         if spawn_count_recent > 0:
             total_new_archive_fitness = np.sum(self.herbivore_new_archive_fitnesses)
-            if total_new_archive_fitness == 0:
+            if total_new_archive_fitness <= 0:
                 #they all died before a single one of them eating food?
+                #or negative fitness? that shouldnt happen
                 self.spawn_herbivore(spawn_count_recent, parent_index=-1)
                 return
 
@@ -1050,7 +1054,7 @@ class World:
         self.predator_positions[:, 1] %= self.world_height
 
         #calculate travelled distance for fitness calcs:
-        self.predator_dist_since_last_meal[self.alive_predator_array] += self.predator_speeds[self.alive_predator_array]
+        self.predator_dist_since_last_meal[self.alive_predator_array] += abs(self.predator_speeds[self.alive_predator_array])
 
     
     def check_predator_herbivore_collisions(self):
@@ -1262,7 +1266,7 @@ class World:
         # 2. from recent archive:
         if spawn_count_recent > 0:
             total_new_archive_fitness = np.sum(self.predator_new_archive_fitnesses)
-            if total_new_archive_fitness == 0:
+            if total_new_archive_fitness <= 0:
                 #they all died before a single one of them eating food?
                 self.spawn_predator(spawn_count_recent, parent_index=-1)
                 return
