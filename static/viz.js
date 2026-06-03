@@ -1,4 +1,5 @@
 import { drawLiveNeuralNetwork } from './network.js';
+import { worldSettings} from './settings.js'
 
 export function visionVecToCanvas(normDist, normAngle, heading, visionRange, halfFov, scaleX, scaleY) {
     const actualDist = (1 - normDist) * visionRange;
@@ -127,15 +128,17 @@ export function drawState(state, canvas, networkCanvas, statsEl) {
     const worldHeight = state.world?.height || canvas.height;
     const scaleX = canvas.width / worldWidth;
     const scaleY = canvas.height / worldHeight;
+    const scaleFactor = (scaleX + scaleY) / 2;
 
     const screenX = x => x * scaleX;
     const screenY = y => y * scaleY;
+
 
     if (Array.isArray(state.plants)) {
         ctx.fillStyle = '#2f8f3a';
         state.plants.forEach((plant) => {
             ctx.beginPath();
-            ctx.arc(screenX(plant.x), screenY(plant.y), 5, 0, Math.PI * 2);
+            ctx.arc(screenX(plant.x), screenY(plant.y), worldSettings.plant_size, 0, Math.PI * 2);
             ctx.fill();
         });
     }
@@ -151,18 +154,21 @@ export function drawState(state, canvas, networkCanvas, statsEl) {
 
     if (Array.isArray(state.herbivores)) {
         state.herbivores.forEach((herbivore) => {
+            const hx = screenX(herbivore.x);
+            const hy = screenY(herbivore.y);
             ctx.beginPath();
-            ctx.arc(screenX(herbivore.x), screenY(herbivore.y), 6, 0, Math.PI * 2);
+            ctx.arc(hx, hy, scaleFactor*worldSettings.herbivore_size, 0, Math.PI * 2);
             ctx.fillStyle = `rgb(${herbivore.red}, ${herbivore.green}, ${herbivore.blue})`;
             ctx.fill();
             if (typeof herbivore.angle === 'number') {
-                const dirX = Math.cos(herbivore.angle) * 10;
-                const dirY = Math.sin(herbivore.angle) * 10;
+                const dirLen = Math.max(8, scaleFactor * worldSettings.herbivore_size * 2.5);
+                const dirX = Math.cos(herbivore.angle) * dirLen;
+                const dirY = Math.sin(herbivore.angle) * dirLen;
                 ctx.strokeStyle = '#0f4bb5';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.moveTo(screenX(herbivore.x), screenY(herbivore.y));
-                ctx.lineTo(screenX(herbivore.x + dirX), screenY(herbivore.y + dirY));
+                ctx.moveTo(hx, hy);
+                ctx.lineTo(hx + dirX, hy + dirY);
                 ctx.stroke();
             }
         });
@@ -175,14 +181,28 @@ export function drawState(state, canvas, networkCanvas, statsEl) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(predator.angle);
+            const front = Math.max(8, worldSettings.predator_size * 2.4);
+            const backX = -Math.max(5, worldSettings.predator_size * 1.6);
+            const backY = Math.max(4, worldSettings.predator_size * 1.6);
             ctx.beginPath();
-            ctx.moveTo(12, 0);
-            ctx.lineTo(-8, 6);
-            ctx.lineTo(-8, -6);
+            ctx.moveTo(front, 0);
+            ctx.lineTo(backX, backY);
+            ctx.lineTo(backX, -backY);
             ctx.closePath();
             ctx.fillStyle = `rgb(${predator.red}, ${predator.green}, ${predator.blue})`;
             ctx.fill();
             ctx.restore();
+            if (typeof predator.angle === 'number') {
+                const dirLen = Math.max(8, scaleFactor * worldSettings.predator_size * 2.5);
+                const dirX = Math.cos(predator.angle) * dirLen;
+                const dirY = Math.sin(predator.angle) * dirLen;
+                ctx.strokeStyle = '#870707';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + dirX, y + dirY);
+                ctx.stroke();
+            }
         });
     }
 
@@ -190,8 +210,9 @@ export function drawState(state, canvas, networkCanvas, statsEl) {
         const pos = { x: state.selected.x, y: state.selected.y };
         ctx.strokeStyle = '#111111';
         ctx.lineWidth = 2;
+        const selRadius = state.selected.species === 'predator' ? worldSettings.predator_size * 2.2 : worldSettings.herbivore_size * 2.2;
         ctx.beginPath();
-        ctx.arc(screenX(pos.x), screenY(pos.y), state.selected.species === 'predator' ? 12 : 10, 0, Math.PI * 2);
+        ctx.arc(screenX(pos.x), screenY(pos.y), Math.max(8, selRadius), 0, Math.PI * 2);
         ctx.stroke();
     }
 

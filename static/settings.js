@@ -1,5 +1,7 @@
 import { fetchSettings, restartSimulation } from './api.js';
 
+export let worldSettings = null;
+
 export const inputsConfig = [
     { input: 'worldSpeedInput', val: 'worldSpeedValue', isFloat: true, fixed: 2 },
     { input: 'maxSpeedInput', val: 'maxSpeedValue', isFloat: false },
@@ -11,6 +13,7 @@ export const inputsConfig = [
     { input: 'startingPredatorInput', val: 'startingPredatorValue', isFloat: false },
     { input: 'startingPlantInput', val: 'startingPlantValue', isFloat: false },
     { input: 'maxPlantInput', val: 'maxPlantValue', isFloat: false },
+    { input: 'plantSizeInput', val: 'plantSizeValue', isFloat: true },
     { input: 'plantNutritionValueInput', val: 'plantNutritionValueValue', isFloat: true, fixed: 2 },
     { input: 'plantRegrowthPowerInput', val: 'plantRegrowthPowerValue', isFloat: true, fixed: 1 },
     { input: 'maxPredatorInput', val: 'maxPredatorValue', isFloat: false },
@@ -28,6 +31,7 @@ export const inputsConfig = [
     { input: 'predatorResurrectionCountInput', val: 'predatorResurrectionCountValue', isFloat: false },
     { input: 'predatorResurrectionRecentCountInput', val: 'predatorResurrectionRecentCountValue', isFloat: false },
     { input: 'predatorResurrectionRandomCountInput', val: 'predatorResurrectionRandomCountValue', isFloat: false },
+    { input: 'herbivoreSizeInput', val: 'herbivoreSizeValue', isFloat: true, fixed: 1 },
     { input: 'maxHerbivoreInput', val: 'maxHerbivoreValue', isFloat: false },
     { input: 'herbivoreSatietyLossInput', val: 'herbivoreSatietyLossValue', isFloat: true, fixed: 3 },
     { input: 'herbivoreMaxSatietyInput', val: 'herbivoreMaxSatietyValue', isFloat: true, fixed: 1 },
@@ -44,7 +48,13 @@ export const inputsConfig = [
     { input: 'herbivoreNutritionValueInput', val: 'herbivoreNutritionValueValue', isFloat: true, fixed: 1 },
     { input: 'herbivoreResurrectionCountInput', val: 'herbivoreResurrectionCountValue', isFloat: false },
     { input: 'herbivoreResurrectionRandomCountInput', val: 'herbivoreResurrectionRandomCountValue', isFloat: false },
-    { input: 'herbivoreResurrectionRecentCountInput', val: 'herbivoreResurrectionRecentCountValue', isFloat: false }
+    { input: 'herbivoreResurrectionRecentCountInput', val: 'herbivoreResurrectionRecentCountValue', isFloat: false },
+    
+    { input: 'predatorSizeInput', val: 'predatorSizeValue', isFloat: true},
+    { input: 'predatorSatietyLossInput', val: 'predatorSatietyLossValue', isFloat: true},
+    { input: 'predatorMaxSatietyInput', val: 'predatorMaxSatietyValue', isFloat: true},
+    { input: 'minHDimSizeInput', val: 'minHDimSizeValue', isFloat: false},
+    { input: 'maxHDimSizeInput', val: 'maxHDimSizeValue', isFloat: false},
 ];
 
 export async function syncSlidersWithBackend() {
@@ -61,6 +71,7 @@ export async function syncSlidersWithBackend() {
             'startingPredatorInput': settings.starting_predator,
             'startingPlantInput': settings.starting_plant,
             'maxPlantInput': settings.max_plant,
+            'plantSizeInput': settings.plant_size,
             'plantNutritionValueInput': settings.plant_nutrition_value,
             'plantRegrowthPowerInput': settings.plant_regrowth_power,
             'maxPredatorInput': settings.max_predator,
@@ -78,6 +89,7 @@ export async function syncSlidersWithBackend() {
             'predatorResurrectionCountInput': settings.predator_resurrection_count,
             'predatorResurrectionRecentCountInput': settings.predator_resurrection_recent_count,
             'predatorResurrectionRandomCountInput': settings.predator_resurrection_random_count,
+            'herbivoreSizeInput': settings.herbivore_size,
             'maxHerbivoreInput': settings.max_herbivore,
             'herbivoreSatietyLossInput': settings.herbivore_satiety_loss_factor,
             'herbivoreMaxSatietyInput': settings.herbivore_max_satiety,
@@ -94,7 +106,13 @@ export async function syncSlidersWithBackend() {
             'herbivoreNutritionValueInput': settings.herbivore_nutrition_value,
             'herbivoreResurrectionCountInput': settings.herbivore_resurrection_count,
             'herbivoreResurrectionRandomCountInput': settings.herbivore_resurrection_random_count,
-            'herbivoreResurrectionRecentCountInput': settings.herbivore_resurrection_recent_count
+            'herbivoreResurrectionRecentCountInput': settings.herbivore_resurrection_recent_count,
+            
+            'predatorSizeInput': settings.predator_size,
+            'predatorSatietyLossInput': settings.predator_satiety_loss_factor,
+            'predatorMaxSatietyInput': settings.predator_max_satiety,
+            'minHDimSizeInput': settings.min_hidden_dim_size,
+            'maxHDimSizeInput': settings.max_hidden_dim_size,
         };
 
         inputsConfig.forEach(cfg => {
@@ -129,7 +147,7 @@ export async function commitSettingsFromDOM() {
         starting_predator: getVal('startingPredatorInput', false),
         starting_plant: getVal('startingPlantInput', false),
         max_plant: getVal('maxPlantInput', false),
-        plant_size: 6,
+        plant_size: getVal('plantSizeInput', true),
         plant_nutrition_value: getVal('plantNutritionValueInput', true),
         plant_regrowth_power: getVal('plantRegrowthPowerInput', true),
         max_predator: getVal('maxPredatorInput', false),
@@ -148,6 +166,7 @@ export async function commitSettingsFromDOM() {
         predator_resurrection_recent_count: getVal('predatorResurrectionRecentCountInput', false),
         predator_resurrection_random_count: getVal('predatorResurrectionRandomCountInput', false),
         max_herbivore: getVal('maxHerbivoreInput', false),
+        herbivore_size: getVal('herbivoreSizeInput', true),
         herbivore_satiety_loss_factor: getVal('herbivoreSatietyLossInput', true),
         herbivore_max_satiety: getVal('herbivoreMaxSatietyInput', true),
         herbivore_avg_gestation_time: getVal('herbivoreAvgGestationInput', true),
@@ -163,8 +182,18 @@ export async function commitSettingsFromDOM() {
         herbivore_nutrition_value: getVal('herbivoreNutritionValueInput', true),
         herbivore_resurrection_count: getVal('herbivoreResurrectionCountInput', false),
         herbivore_resurrection_random_count: getVal('herbivoreResurrectionRandomCountInput', false),
-        herbivore_resurrection_recent_count: getVal('herbivoreResurrectionRecentCountInput', false)
+        herbivore_resurrection_recent_count: getVal('herbivoreResurrectionRecentCountInput', false),
+
+        predator_size: getVal('predatorSizeInput', true),
+        predator_satiety_loss_factor: getVal('predatorSatietyLossInput', true),
+        predator_max_satiety: getVal('predatorMaxSatietyInput', true),
+        min_hidden_dim_size: getVal('minHDimSizeInput', false),
+        max_hidden_dim_size: getVal('maxHDimSizeInput', false)
     };
 
     return restartSimulation(dataToSend);
+}
+
+export async function updateWorldSettings() {
+    worldSettings = await fetchSettings();
 }

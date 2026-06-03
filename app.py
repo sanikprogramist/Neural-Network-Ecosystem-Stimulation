@@ -73,6 +73,7 @@ class RestartSettingsRequest(BaseModel):
     
     # Herbivore Settings
     max_herbivore: int
+    herbivore_size : float
     herbivore_satiety_loss_factor: float
     herbivore_max_satiety: float
     herbivore_avg_gestation_time: float
@@ -159,6 +160,7 @@ def get_current_settings():
         "predator_resurrection_random_count": world.predator_resurrection_random_count,
         
         "max_herbivore": world.max_herbivore,
+        "herbivore_size": world.herbivore_size,
         "herbivore_satiety_loss_factor": world.herbivore_satiety_loss_factor,
         "herbivore_max_satiety": world.herbivore_max_satiety,
         "herbivore_avg_gestation_time": world.herbivore_avg_gestation_time,
@@ -174,7 +176,14 @@ def get_current_settings():
         "herbivore_nutrition_value": world.herbivore_nutrition_value,
         "herbivore_resurrection_count": world.herbivore_resurrection_count,
         "herbivore_resurrection_random_count": world.herbivore_resurrection_random_count,
-        "herbivore_resurrection_recent_count": world.herbivore_resurrection_recent_count
+        "herbivore_resurrection_recent_count": world.herbivore_resurrection_recent_count,
+
+        "predator_size": world.predator_size,
+        "predator_satiety_loss_factor": world.predator_satiety_loss_factor,
+        "predator_max_satiety": world.predator_max_satiety,
+        "min_hidden_dim_size": world.min_hidden_dim_size,
+        "max_hidden_dim_size": world.max_hidden_dim_size,
+        
     }
 
 @app.post("/restart_simulation")
@@ -217,6 +226,7 @@ def restart_simulation(req: RestartSettingsRequest):
     world.predator_resurrection_random_count = req.predator_resurrection_random_count
     
     world.max_herbivore = req.max_herbivore
+    world.herbivore_size = req.herbivore_size
     world.herbivore_satiety_loss_factor = req.herbivore_satiety_loss_factor
     world.herbivore_max_satiety = req.herbivore_max_satiety
     world.herbivore_avg_gestation_time = req.herbivore_avg_gestation_time
@@ -233,6 +243,13 @@ def restart_simulation(req: RestartSettingsRequest):
     world.herbivore_resurrection_count = req.herbivore_resurrection_count
     world.herbivore_resurrection_random_count = req.herbivore_resurrection_random_count
     world.herbivore_resurrection_recent_count = req.herbivore_resurrection_recent_count
+
+    
+    world.predator_size = req.predator_size
+    world.predator_satiety_loss_factor = req.predator_satiety_loss_factor
+    world.predator_max_satiety = req.predator_max_satiety
+    world.min_hidden_dim_size = req.min_hidden_dim_size
+    world.max_hidden_dim_size = req.max_hidden_dim_size
 
     # This call updates dependent attributes such as plant_random_spawn_interval, 
     # plant_reproduction_interval, and re-allocates size arrays (e.g., herbivore_positions, 

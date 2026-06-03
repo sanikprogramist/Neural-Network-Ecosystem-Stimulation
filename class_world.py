@@ -19,14 +19,15 @@ from class_animal_brain_nn import *
 # 22. age pyramid constant scale
 # 23. may be too complicated - skip connections - for a real NEAT lagorithm
 
+# PLANT SIZE SETTING
 #since last commit:
-# flexible brain architecture!
+# more settings
+
 
 class World:
 
     def __init__(self):
-        # I will mark editable settings with #M
-        #globals
+         #globals
         self.world_speed_multiplier = 1.15 #setting exists
         self.world_width = 800
         self.world_height = 600
@@ -40,8 +41,8 @@ class World:
         self.global_mutation_rate = 0.035 #setting exists
         self.global_mutation_strength = 0.04 #setting exists
         self.colour_change_strength = 15 
-        self.min_hidden_dim_size = 1 # ADD 
-        self.max_hidden_dim_size = 10 # ADD 
+        self.min_hidden_dim_size = 1 #setting exists 
+        self.max_hidden_dim_size = 10 #setting exists 
         self.weight_std_for_new_neurons = 0.35 #setting exists
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
         self.enable_training_predators = True #ADD enable or disable always spawning a random "training" predator when there are no predators left, to exert selection pressure on herbivores even in the absence of predators. 
@@ -52,7 +53,7 @@ class World:
 
         #plants
         self.max_plant = 300 #setting exists
-        self.plant_size = 5  
+        self.plant_size = 5  #setting exists
         self.plant_nutrition_value = 0.85 #setting exists
         self.plant_regrowth_power = 1.0 #setting exists
         self.plant_random_spawn_interval = 1 / self.plant_regrowth_power #2.2 originally
@@ -60,9 +61,9 @@ class World:
 
         #predators # we dont add predator settings rn because their mechanics are very outdated
         self.max_predator = 1000 #setting exists
-        self.predator_size = 5 
-        self.predator_satiety_loss_factor = 0.005 #ADD
-        self.predator_max_satiety = 2 #ADD
+        self.predator_size = 5 #setting exists
+        self.predator_satiety_loss_factor = 0.005 #setting exists
+        self.predator_max_satiety = 2 #setting exists
         self.predator_avg_gestation_time = 32 #setting exists
         self.predator_gestation_time_std_dev = 5 #setting exists
         self.predator_reproduction_minimum_satiety = 1.0 #setting exists
@@ -76,7 +77,7 @@ class World:
 
         #herbivores
         self.max_herbivore = 2000 #setting exists
-        self.herbivore_size = 4
+        self.herbivore_size = 5 #setting exists 
         self.herbivore_satiety_loss_factor = 0.006 #setting exists how fast they go hungry, this is multiplied with speed
         self.herbivore_max_satiety = 2 #setting exists
         self.herbivore_avg_gestation_time = 28 #setting exists
@@ -931,7 +932,7 @@ class World:
         if (np.sum(self.alive_predator_array) <= 5) and (np.sum(self.alive_herbivore_array) > self.predators_resurrect_after_herbivores_reach):
             self.start_resurrecting_predators = True
         elif (np.sum(self.alive_predator_array) == 0) and self.enable_training_predators:
-            #add random "training predators" to exert selection pressure:
+            #  add random "training predators" to exert selection pressure:
             self.spawn_predator(np.random.randint(low=1, high=4), parent_index=-1, random_res=True)
         if not self.start_resurrecting_predators:
             return

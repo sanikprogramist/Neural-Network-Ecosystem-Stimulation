@@ -210,7 +210,7 @@
 
     <div id="settingsView" style="display: none; background: white; padding: 25px; border: 1px solid #d0d7de; border-radius: 8px; max-width: 850px;">
 
-        <h2 style="margin-bottom: 4px;">Simulation Settings</h2>
+        <h2 style="margin-bottom: 4px; color: #047600;">Simulation Settings</h2>
         <p style="color: #666; margin-bottom: 20px;">Adjust environmental constraints, parameters, and resurrection conditions.</p>
 
         <style>
@@ -227,8 +227,8 @@
             .sg p { font-size: 12px; color: #586069; margin: 0 0 6px; font-style: italic; line-height: 1.5; }
             .sg input[type=range] { width: 100%; }
             .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
-            .section-label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #8a9199; margin: 1.5rem 0 1rem; }
-            .section-label:first-child { margin-top: 0; }
+            .section-label { font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #0d9909; margin: 2.5rem 0 2rem; }
+            .section-label:first-child { margin-top: 35px; }
         </style>
 
         <div class="tabs">
@@ -240,18 +240,35 @@
 
         <!-- GLOBAL -->
         <div id="tab-global" class="tab-panel active">
+            <div class="section-label">Physics</div>
             <div class="grid2">
             <div>
                 <div class="sg"><label>World Speed Multiplier <span id="worldSpeedValue">1.15</span>x</label><p>Speeds up or slows down time processing steps across the ecosystem.</p><input type="range" id="worldSpeedInput" min="0.1" max="5.0" step="0.05" value="1.15" oninput="document.getElementById('worldSpeedValue').textContent=parseFloat(this.value).toFixed(2)"></div>
                 <div class="sg"><label>Maximum Animal Speed <span id="maxSpeedValue">30</span></label><p>Maximum velocity attainable by animals. The neural net output scales with this.</p><input type="range" id="maxSpeedInput" min="10" max="100" step="5" value="30" oninput="document.getElementById('maxSpeedValue').textContent=this.value"></div>
-                <div class="sg"><label>Max Angular Velocity <span id="maxAngularVelocityValue">3.5</span></label><p>How fast animals can turn.</p><input type="range" id="maxAngularVelocityInput" min="0.5" max="10.0" step="0.1" value="3.5" oninput="document.getElementById('maxAngularVelocityValue').textContent=parseFloat(this.value).toFixed(1)"></div>
-                <div class="sg"><label>Global Mutation Rate <span id="globalMutationRateValue">0.035</span></label><p>Probability that an individual weight, bias, or neuron count mutates during reproduction.</p><input type="range" id="globalMutationRateInput" min="0.0" max="1.0" step="0.005" value="0.035" oninput="document.getElementById('globalMutationRateValue').textContent=parseFloat(this.value).toFixed(3)"></div>
             </div>
             <div>
+                <div class="sg"><label>Max Angular Velocity <span id="maxAngularVelocityValue">3.5</span></label><p>How fast animals can turn.</p><input type="range" id="maxAngularVelocityInput" min="0.5" max="10.0" step="0.1" value="3.5" oninput="document.getElementById('maxAngularVelocityValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            </div>
+            <div class="section-label">Mutations</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Global Mutation Rate <span id="globalMutationRateValue">0.035</span></label><p>Probability that an individual weight, bias, or neuron count mutates during reproduction.</p><input type="range" id="globalMutationRateInput" min="0.0" max="1.0" step="0.005" value="0.035" oninput="document.getElementById('globalMutationRateValue').textContent=parseFloat(this.value).toFixed(3)"></div>
                 <div class="sg"><label>Global Mutation Strength <span id="globalMutationStrengthValue">0.04</span></label><p>If a weight mutates, this is the standard deviation of the gaussian noise applied to it.</p><input type="range" id="globalMutationStrengthInput" min="0.01" max="1.0" step="0.01" value="0.04" oninput="document.getElementById('globalMutationStrengthValue').textContent=parseFloat(this.value).toFixed(2)"></div>
                 <div class="sg"><label>Weight Std Dev (New Neurons) <span id="weightStdNewNeuronsValue">0.35</span></label><p>When a new neuron appears, this standard deviation is used to initialise its connected weights.</p><input type="range" id="weightStdNewNeuronsInput" min="0.05" max="1.5" step="0.05" value="0.35" oninput="document.getElementById('weightStdNewNeuronsValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+            </div>
+            <div>
+                <div class="sg"><label>Minimum Hidden Layer Size <span id="minHDimSizeValue">1</span></label><p>The minimum number of neurons in a hidden layer in each animal brain</p><input type="range" id="minHDimSizeInput" min="1" max="30" step="1" value="1" oninput="document.getElementById('minHDimSizeValue').textContent=this.value"></div>
+                <div class="sg"><label>Maximum Hidden Layer Size <span id="maxHDimSizeValue">10</span></label><p>The maximum number of neurons in a hidden layer in each animal brain</p><input type="range" id="maxHDimSizeInput" max="1" max="30" step="1" value="1" oninput="document.getElementById('maxHDimSizeValue').textContent=this.value"></div>
+            </div>
+            </div>
+            <div class="section-label">Initial Populations</div>
+            <div class="grid2">
+            <div>
                 <div class="sg"><label>Initial Herbivores <span id="startingHerbivoreValue">100</span></label><p>Number of herbivores that appear at the start.</p><input type="range" id="startingHerbivoreInput" min="0" max="500" step="10" value="100" oninput="document.getElementById('startingHerbivoreValue').textContent=this.value"></div>
                 <div class="sg"><label>Initial Predators <span id="startingPredatorValue">20</span></label><p>Number of predators that appear at the start.</p><input type="range" id="startingPredatorInput" min="0" max="200" step="5" value="20" oninput="document.getElementById('startingPredatorValue').textContent=this.value"></div>
+            </div>
+            <div>
                 <div class="sg"><label>Initial Plants <span id="startingPlantValue">100</span></label><p>Number of plants that appear at the start.</p><input type="range" id="startingPlantInput" min="10" max="500" step="10" value="100" oninput="document.getElementById('startingPlantValue').textContent=this.value"></div>
             </div>
             </div>
@@ -262,6 +279,7 @@
             <div class="grid2">
             <div>
                 <div class="sg"><label>Max Plant Capacity <span id="maxPlantValue">300</span></label><p>The absolute limit of plants allowed to exist simultaneously.</p><input type="range" id="maxPlantInput" min="10" max="1000" step="10" value="300" oninput="document.getElementById('maxPlantValue').textContent=this.value"></div>
+                <div class="sg"><label>Plant Size <span id="plantSizeValue">5</span></label><p>The physical size of plants.</p><input type="range" id="plantSizeInput" min="1" max="10" step="0.5" value="5" oninput="document.getElementById('plantSizeValue').textContent=this.value"></div>
             </div>
             <div>
                 <div class="sg"><label>Plant Nutrition Value <span id="plantNutritionValueValue">0.85</span></label><p>How much satiety a herbivore gains when eating a single plant.</p><input type="range" id="plantNutritionValueInput" min="0.1" max="3.0" step="0.05" value="0.85" oninput="document.getElementById('plantNutritionValueValue').textContent=parseFloat(this.value).toFixed(2)"></div>
@@ -276,31 +294,48 @@
             <div class="grid2">
             <div>
                 <div class="sg"><label>Max Predator Capacity <span id="maxPredatorValue">1000</span></label><p>How many predators can exist simultaneously.</p><input type="range" id="maxPredatorInput" min="50" max="2000" step="50" value="1000" oninput="document.getElementById('maxPredatorValue').textContent=this.value"></div>
+                <div class="sg"><label>Predator Size <span id="predatorSizeValue">4</span></label><p>The physical size of each predator animal (radius in px).</p><input type="range" id="predatorSizeInput" min="1" max="10" step="0.5" value="4" oninput="document.getElementById('predatorSizeValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            <div>
                 <div class="sg"><label>Average Lifespan <span id="predatorAvgAgeValue">120.0</span>s</label><p>Average life expectancy of predators.</p><input type="range" id="predatorAvgAgeInput" min="20.0" max="400.0" step="5.0" value="120.0" oninput="document.getElementById('predatorAvgAgeValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Lifespan Std Dev <span id="predatorAgeStdValue">7.0</span>s</label><p>Standard deviation of predator lifespan.</p><input type="range" id="predatorAgeStdInput" min="0.0" max="40.0" step="0.5" value="7.0" oninput="document.getElementById('predatorAgeStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
+            </div>
+            <div class="section-label">Perception</div>
+            <div class="grid2">
             <div>
-                <div class="sg"><label>Maturity Age <span id="predatorMinAgeReproductionValue">24.0</span>s</label><p>Predators must be at least this old to start reproducing.</p><input type="range" id="predatorMinAgeReproductionInput" min="0.0" max="150.0" step="1.0" value="24.0" oninput="document.getElementById('predatorMinAgeReproductionValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Vision Range <span id="predatorVisionRangeValue">220</span>px</label><p>How far predators can see.</p><input type="range" id="predatorVisionRangeInput" min="50" max="600" step="10" value="220" oninput="document.getElementById('predatorVisionRangeValue').textContent=this.value"></div>
+            </div>
+            <div>
                 <div class="sg"><label>Field of Vision <span id="predatorFOVValue">1.05</span> rad</label><p>The spread of the predator's vision sector. How wide they can see.</p><input type="range" id="predatorFOVInput" min="0.2" max="6.28" step="0.05" value="1.05" oninput="document.getElementById('predatorFOVValue').textContent=parseFloat(this.value).toFixed(2)"></div>
+            </div>
+            </div>
+            <div class="section-label">Feeding</div>
+            <div class="grid2">
+            <div>
+                <div class="sg"><label>Satiety Loss Rate <span id="predatorSatietyLossValue">0.006</span></label><p>How quickly predators lose satiety. Scales with movement speed.</p><input type="range" id="predatorSatietyLossInput" min="0.001" max="0.05" step="0.001" value="0.006" oninput="document.getElementById('predatorSatietyLossValue').textContent=parseFloat(this.value).toFixed(3)"></div>
+                <div class="sg"><label>Max Satiety <span id="predatorMaxSatietyValue">2.0</span></label><p>Maximum satiety a predator can store.</p><input type="range" id="predatorMaxSatietyInput" min="0.5" max="5.0" step="0.1" value="2.0" oninput="document.getElementById('predatorMaxSatietyValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            <div>
+                <div class="sg"><label>Eating Inhibition Threshold <span id="predatorEatPercentThresholdValue">75</span>%</label><p>Predators cannot eat if their satiety is above this percentage.</p><input type="range" id="predatorEatPercentThresholdInput" min="10" max="100" step="5" value="75" oninput="document.getElementById('predatorEatPercentThresholdValue').textContent=this.value"></div>
             </div>
             </div>
             <div class="section-label">Reproduction</div>
             <div class="grid2">
             <div>
+                <div class="sg"><label>Maturity Age <span id="predatorMinAgeReproductionValue">24.0</span>s</label><p>Predators must be at least this old to start reproducing.</p><input type="range" id="predatorMinAgeReproductionInput" min="0.0" max="150.0" step="1.0" value="24.0" oninput="document.getElementById('predatorMinAgeReproductionValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Avg Gestation Time <span id="predatorAvgGestationValue">32.0</span>s</label><p>Average time required for a well-fed predator to spawn a child.</p><input type="range" id="predatorAvgGestationInput" min="5.0" max="120.0" step="1.0" value="32.0" oninput="document.getElementById('predatorAvgGestationValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Gestation Std Dev <span id="predatorGestationStdValue">5.0</span>s</label><p>Standard deviation of gestation time.</p><input type="range" id="predatorGestationStdInput" min="0.0" max="25.0" step="0.5" value="5.0" oninput="document.getElementById('predatorGestationStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
             <div>
                 <div class="sg"><label>Min Reproduction Satiety <span id="predatorMinReproductionSatietyValue">1.0</span></label><p>Predators will only reproduce when they are at least this sated.</p><input type="range" id="predatorMinReproductionSatietyInput" min="0.1" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('predatorMinReproductionSatietyValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Reproduction Satiety Loss <span id="predatorReproductionLossValue">0.4</span></label><p>Satiety subtracted from the parent predator upon spawning a child.</p><input type="range" id="predatorReproductionLossInput" min="0.1" max="1.5" step="0.05" value="0.4" oninput="document.getElementById('predatorReproductionLossValue').textContent=parseFloat(this.value).toFixed(2)"></div>
-                <div class="sg"><label>Eating Inhibition Threshold <span id="predatorEatPercentThresholdValue">75</span>%</label><p>Predators cannot eat if their satiety is above this percentage.</p><input type="range" id="predatorEatPercentThresholdInput" min="10" max="100" step="5" value="75" oninput="document.getElementById('predatorEatPercentThresholdValue').textContent=this.value"></div>
             </div>
             </div>
             <div class="section-label">Resurrection</div>
             <div class="grid2">
             <div>
-                <div class="sg"><label>Resurrect Threshold <span id="predatorsResurrectAfterHerbivoresReachValue">140</span> herbivores</label><p>Predators begin to be resurrected when the herbivore population reaches this size.</p><input type="range" id="predatorsResurrectAfterHerbivoresReachInput" min="10" max="500" step="10" value="140" oninput="document.getElementById('predatorsResurrectAfterHerbivoresReachValue').textContent=this.value"></div>
+                <div class="sg"><label>Resurrect Threshold<span id="predatorsResurrectAfterHerbivoresReachValue">140</span> herbivores</label><p>Predators begin to be resurrected when the herbivore population reaches this size.</p><input type="range" id="predatorsResurrectAfterHerbivoresReachInput" min="10" max="500" step="10" value="140" oninput="document.getElementById('predatorsResurrectAfterHerbivoresReachValue').textContent=this.value"></div>
                 <div class="sg"><label>Fitness Archive Resurrection <span id="predatorResurrectionCountValue">15</span></label><p>Number of predators resurrected from the top historical fitness archive.</p><input type="range" id="predatorResurrectionCountInput" min="0" max="50" step="1" value="15" oninput="document.getElementById('predatorResurrectionCountValue').textContent=this.value"></div>
             </div>
             <div>
@@ -316,16 +351,23 @@
             <div class="grid2">
             <div>
                 <div class="sg"><label>Max Herbivore Capacity <span id="maxHerbivoreValue">2000</span></label><p>Maximum number of herbivores that can be alive simultaneously.</p><input type="range" id="maxHerbivoreInput" min="50" max="3000" step="50" value="2000" oninput="document.getElementById('maxHerbivoreValue').textContent=this.value"></div>
+                <div class="sg"><label>Herbivore Size <span id="herbivoreSizeValue">4</span></label><p>The physical size of each herbivore animal (radius in px).</p><input type="range" id="herbivoreSizeInput" min="1" max="10" step="0.5" value="4" oninput="document.getElementById('herbivoreSizeValue').textContent=parseFloat(this.value).toFixed(1)"></div>
+            </div>
+            <div>    
                 <div class="sg"><label>Average Lifespan <span id="herbivoreAvgAgeValue">100.0</span>s</label><p>Average life expectancy of herbivores.</p><input type="range" id="herbivoreAvgAgeInput" min="10.0" max="300.0" step="5.0" value="100.0" oninput="document.getElementById('herbivoreAvgAgeValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Lifespan Std Dev <span id="herbivoreAgeStdValue">7.0</span>s</label><p>Standard deviation of herbivore lifespan.</p><input type="range" id="herbivoreAgeStdInput" min="0.0" max="30.0" step="0.5" value="7.0" oninput="document.getElementById('herbivoreAgeStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
+            </div>
+            <div class="section-label">Perception</div>
+            <div class="grid2">
             <div>
-                <div class="sg"><label>Maturity Age <span id="herbivoreMinAgeReproductionValue">23.0</span>s</label><p>Herbivores must be at least this old before they can reproduce.</p><input type="range" id="herbivoreMinAgeReproductionInput" min="0.0" max="100.0" step="1.0" value="23.0" oninput="document.getElementById('herbivoreMinAgeReproductionValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Vision Range <span id="herbivoreVisionRangeValue">150</span>px</label><p>How far herbivores can see.</p><input type="range" id="herbivoreVisionRangeInput" min="50" max="500" step="10" value="150" oninput="document.getElementById('herbivoreVisionRangeValue').textContent=this.value"></div>
+            </div>
+            <div>
                 <div class="sg"><label>Field of Vision <span id="herbivoreFOVValue">3.46</span> rad</label><p>The herbivore's viewing angle (1.1 × π ≈ 3.46 rad).</p><input type="range" id="herbivoreFOVInput" min="0.5" max="6.28" step="0.05" value="3.46" oninput="document.getElementById('herbivoreFOVValue').textContent=parseFloat(this.value).toFixed(2)"></div>
             </div>
             </div>
-            <div class="section-label">Hunger & Feeding</div>
+            <div class="section-label">Feeding</div>
             <div class="grid2">
             <div>
                 <div class="sg"><label>Satiety Loss Rate <span id="herbivoreSatietyLossValue">0.006</span></label><p>How quickly herbivores lose satiety. Scales with movement speed.</p><input type="range" id="herbivoreSatietyLossInput" min="0.001" max="0.05" step="0.001" value="0.006" oninput="document.getElementById('herbivoreSatietyLossValue').textContent=parseFloat(this.value).toFixed(3)"></div>
@@ -339,6 +381,7 @@
             <div class="section-label">Reproduction</div>
             <div class="grid2">
             <div>
+                <div class="sg"><label>Maturity Age <span id="herbivoreMinAgeReproductionValue">23.0</span>s</label><p>Herbivores must be at least this old before they can reproduce.</p><input type="range" id="herbivoreMinAgeReproductionInput" min="0.0" max="100.0" step="1.0" value="23.0" oninput="document.getElementById('herbivoreMinAgeReproductionValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Avg Gestation Time <span id="herbivoreAvgGestationValue">28.0</span>s</label><p>Average time for a well-fed herbivore to produce offspring.</p><input type="range" id="herbivoreAvgGestationInput" min="5.0" max="100.0" step="1.0" value="28.0" oninput="document.getElementById('herbivoreAvgGestationValue').textContent=parseFloat(this.value).toFixed(1)"></div>
                 <div class="sg"><label>Gestation Std Dev <span id="herbivoreGestationStdValue">5.0</span>s</label><p>Standard deviation of gestation time.</p><input type="range" id="herbivoreGestationStdInput" min="0.0" max="20.0" step="0.5" value="5.0" oninput="document.getElementById('herbivoreGestationStdValue').textContent=parseFloat(this.value).toFixed(1)"></div>
             </div>
@@ -360,7 +403,7 @@
         </div>
 
         <br>
-        <button id="backButton" style="background-color: #f0f0f0;">Go Back</button>
+        <button id="backButton" style="background-color: #686868;">Go Back</button>
         <button id="restartSettingsButton" style="background-color: #2f8f3a; color: white; border-color: #25722e;">Restart with new settings</button>
 
         <script>

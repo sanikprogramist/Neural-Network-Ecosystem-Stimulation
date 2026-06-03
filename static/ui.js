@@ -140,6 +140,7 @@ export function initUI() {
             document.getElementById('networkCanvas').getContext('2d').clearRect(0,0, document.getElementById('networkCanvas').width, document.getElementById('networkCanvas').height);
             document.getElementById('settingsView').style.display = 'none';
             document.getElementById('simView').style.display = 'block';
+            settings.updateWorldSettings();
             startLoop();
         } catch (err) {
             console.error('Failed to commit settings config:', err);
@@ -150,6 +151,7 @@ export function initUI() {
     // initial load
     window.addEventListener('load', async () => {
         try {
+            settings.updateWorldSettings();
             const state = await api.fetchState();
             lastState = state;
             drawState(state, canvas, networkCanvas, statsEl);
