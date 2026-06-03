@@ -18,6 +18,7 @@ export function initUI() {
     const loadInput = document.getElementById('loadInput');
     const loadButton = document.getElementById('loadButton');
     const killButton = document.getElementById('killButton');
+    const downloadChartDataButton = document.getElementById('downloadChartDataButton');
     const settingsButton = document.getElementById('settingsButton');
     const backButton = document.getElementById('backButton');
     const restartSettingsButton = document.getElementById('restartSettingsButton');
@@ -136,6 +137,7 @@ export function initUI() {
         try {
             await settings.commitSettingsFromDOM();
             charts.resetPopulationChart();
+            charts.resetChartHistory();
             await api.sendSelection(null, null);
             document.getElementById('networkCanvas').getContext('2d').clearRect(0,0, document.getElementById('networkCanvas').width, document.getElementById('networkCanvas').height);
             document.getElementById('settingsView').style.display = 'none';
@@ -146,6 +148,10 @@ export function initUI() {
             console.error('Failed to commit settings config:', err);
             alert('Could not update simulation settings.');
         }
+    });
+
+    downloadChartDataButton.addEventListener('click', () => {
+        charts.downloadChartHistoryAsCsv();
     });
 
     // initial load

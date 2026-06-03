@@ -125,6 +125,11 @@ def get_chart():
     #get data needed to draw charts from backend
     return world.get_chart_data()
 
+@app.get("/save_chart_data")
+def save_chart_data():
+    # this endpoint provides the current chart snapshot. The browser stores the full history locally
+    return world.get_chart_data()
+
 @app.get("/settings")
 def get_current_settings():
     return {

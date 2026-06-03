@@ -11,17 +11,15 @@ from class_animal_brain_nn import *
 
 #NOTES:
 # 1. fitness is exploitable but i dont know how to fix it. It probably will always be exploitable
-# 2. herbivore reproduction timer is going up even though pop is at max - not sure if this is a problem
-# 17. some settings missing
 # 18. save all chart data from the whole runtime
 # 19. brain designer tab? 
-# 21. would be nice to connect animal sizes to settings and app.js
 # 22. age pyramid constant scale
 # 23. may be too complicated - skip connections - for a real NEAT lagorithm
 
 # PLANT SIZE SETTING
 #since last commit:
 # more settings
+# connected 
 
 
 class World:
@@ -386,8 +384,8 @@ class World:
             #for population pyramid:
             "alive_herbivore_ages": self.herbivore_ages[self.alive_herbivore_array].tolist(),
             "alive_predator_ages": self.predator_ages[self.alive_predator_array].tolist(),
-            "herbivore_maturity_age": int(self.herbivore_reproduction_minimum_satiety),
-            "predator_maturity_age": int(self.predator_reproduction_minimum_satiety),
+            "herbivore_maturity_age": int(self.herbivore_min_age_to_reproduce),
+            "predator_maturity_age": int(self.predator_min_age_to_reproduce),
         }
     
     def debug_kill(self):

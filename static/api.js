@@ -9,6 +9,12 @@ export async function fetchChartData() {
     return res.json();
 }
 
+export async function fetchSavedChartData() {
+    const res = await fetch('/save_chart_data');
+    if (!res.ok) throw new Error('Could not load saved chart data');
+    return res.json();
+}
+
 export async function stepWorld(dt) {
     const res = await fetch('/step', {
         method: 'POST',
