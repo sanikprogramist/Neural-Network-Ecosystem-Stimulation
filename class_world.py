@@ -11,21 +11,19 @@ from class_animal_brain_nn import *
 
 #NOTES:
 # 1. fitness is exploitable but i dont know how to fix it. It probably will always be exploitable
-# 18. save all chart data from the whole runtime
 # 19. brain designer tab? 
-# 22. age pyramid constant scale
 # 23. may be too complicated - skip connections - for a real NEAT lagorithm
+# 24. new chart - brain complexity
+# 25. replace speed as an input.
 
-# PLANT SIZE SETTING
 #since last commit:
-# more settings
-# connected 
+# age pyramid constant scale
 
 
 class World:
 
     def __init__(self):
-         #globals
+        #globals
         self.world_speed_multiplier = 1.15 #setting exists
         self.world_width = 800
         self.world_height = 600

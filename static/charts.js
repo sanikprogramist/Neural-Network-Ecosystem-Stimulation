@@ -105,8 +105,9 @@ export async function refreshCharts() {
         agePyramidChart.data.datasets[1].data = pyramid.predator;
 
         const maxValue = Math.max(...pyramid.herbivore.map(Math.abs), ...pyramid.predator);
-        agePyramidChart.options.scales.x.max = maxValue;
-        agePyramidChart.options.scales.x.min = -maxValue;
+        const bound = Math.max(40, Math.ceil(maxValue / 40) * 40);
+        agePyramidChart.options.scales.x.max = bound;
+        agePyramidChart.options.scales.x.min = -bound;
         agePyramidChart.update();
     } catch (err) {
         console.error('Chart update failed:', err);

@@ -161,7 +161,7 @@ export function initUI() {
             const state = await api.fetchState();
             lastState = state;
             drawState(state, canvas, networkCanvas, statsEl);
-            document.getElementById('stats').innerHTML = '<div class="empty-stats-msg">Click a herbivore or predator to view stats.</div>';
+            document.getElementById('stats').innerHTML = '<div class="empty-stats-msg">Click an animal to view its stats and neural network brain.</div>';
         } catch (error) {
             statusEl.textContent = 'Unable to load simulation state.';
             console.error(error);

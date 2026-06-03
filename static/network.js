@@ -1,13 +1,11 @@
+
+
 export function drawLiveNeuralNetwork(nn, networkCanvas, neuralNetPulsesEnabled = true) {
     const networkCtx = networkCanvas.getContext('2d');
     const w = networkCanvas.width = networkCanvas.clientWidth;
     const h = networkCanvas.height = networkCanvas.clientHeight;
 
     if (!nn) {
-        networkCtx.clearRect(0, 0, w, h);
-        networkCtx.fillStyle = '#111827';
-        networkCtx.textAlign = 'center';
-        networkCtx.fillText("Click a predator or herbivore to view its neural network brain!", w / 2, h / 2);
         return;
     }
 

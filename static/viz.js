@@ -106,7 +106,7 @@ export function formatStats(stats) {
 }
 
 export function updateStatsPanel(statsEl, message) {
-    if (typeof message === 'string' && message.trim().startsWith('Click a herbivore')) {
+    if (typeof message === 'string' && message.trim().startsWith('Click an animal')) {
         statsEl.innerHTML = `<div class="empty-stats-msg">${message}</div>`;
     } else if (typeof message === 'string') {
         statsEl.innerHTML = message;
@@ -149,7 +149,7 @@ export function drawState(state, canvas, networkCanvas, statsEl) {
         updateStatsPanel(statsEl, state.selected);
     } else {
         drawLiveNeuralNetwork(null, networkCanvas);
-        updateStatsPanel(statsEl, 'Click a herbivore or predator to view stats.');
+        updateStatsPanel(statsEl, 'Click an animal to view its stats and neural network brain.');
     }
 
     if (Array.isArray(state.herbivores)) {
