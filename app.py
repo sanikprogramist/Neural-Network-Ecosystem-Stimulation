@@ -91,6 +91,12 @@ class RestartSettingsRequest(BaseModel):
     herbivore_resurrection_random_count: int
     herbivore_resurrection_recent_count: int
 
+    predator_size: float
+    predator_satiety_loss_factor: float
+    predator_max_satiety: float
+    min_hidden_dim_size: int
+    max_hidden_dim_size: int
+
 @app.get("/save")
 def save_world():
     buf = io.BytesIO()
