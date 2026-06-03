@@ -17,7 +17,7 @@ from class_animal_brain_nn import *
 # 19. brain designer tab? 
 # 21. would be nice to connect animal sizes to settings and app.js
 # 22. age pyramid constant scale
-# 23. may be too complicated - skip connections. Would be really cool
+# 23. may be too complicated - skip connections - for a real NEAT lagorithm
 
 #since last commit:
 # flexible brain architecture!
@@ -928,7 +928,7 @@ class World:
         self.predators_reproduce(dt) # check if they reproduce 
     
     def predators_check_resurrect(self, dt):
-        if (np.sum(self.alive_predator_array) == 0) and (np.sum(self.alive_herbivore_array) > self.predators_resurrect_after_herbivores_reach):
+        if (np.sum(self.alive_predator_array) <= 5) and (np.sum(self.alive_herbivore_array) > self.predators_resurrect_after_herbivores_reach):
             self.start_resurrecting_predators = True
         elif (np.sum(self.alive_predator_array) == 0) and self.enable_training_predators:
             #add random "training predators" to exert selection pressure:
@@ -1053,7 +1053,7 @@ class World:
         self.predator_positions[:, 1] %= self.world_height
 
         #calculate travelled distance for fitness calcs:
-        self.predator_dist_since_last_meal[self.alive_predator_array] += np.linalg.norm(dpos, axis=1)
+        self.predator_dist_since_last_meal[self.alive_predator_array] += self.predator_speeds[self.alive_predator_array]
 
     
     def check_predator_herbivore_collisions(self):
