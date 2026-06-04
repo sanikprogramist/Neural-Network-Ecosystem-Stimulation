@@ -2,6 +2,7 @@ import * as api from './api.js';
 import * as charts from './charts.js';
 import * as settings from './settings.js';
 import { drawState } from './viz.js';
+import { initBrainDesigner } from './brain_designer.js';
 
 let running = false;
 let lastState = null;
@@ -18,6 +19,14 @@ export function initUI() {
     const loadInput = document.getElementById('loadInput');
     const loadButton = document.getElementById('loadButton');
     const killButton = document.getElementById('killButton');
+    const brainDesignerButton = document.getElementById('brainDesignerButton');
+    const brainDesignerView = document.getElementById('brainDesignerView');
+    const brainBackButton = document.getElementById('brainBackButton');
+    const spawnWithBrainButton = document.getElementById('spawnWithBrainButton');
+    const brainSpeciesSelect = document.getElementById('brainSpeciesSelect');
+    const brainColourPicker = document.getElementById('brainColourPicker');
+    const brainDesignerCanvas = document.getElementById('brainDesignerCanvas');
+    const spawnCountInput = document.getElementById('spawnCountInput');
     const spawnHerbivoresButton = document.getElementById('spawnHerbivoresButton');
     const spawnPredatorsButton = document.getElementById('spawnPredatorsButton');
     const saveBrainButton = document.getElementById('saveBrainButton');
@@ -27,6 +36,27 @@ export function initUI() {
     const settingsButton = document.getElementById('settingsButton');
     const backButton = document.getElementById('backButton');
     const restartSettingsButton = document.getElementById('restartSettingsButton');
+    const addHiddenLayerButton = document.getElementById('addHiddenLayerButton');
+    const hiddenLayersList = document.getElementById('hiddenLayersList');
+
+    const brainDesigner = initBrainDesigner({
+        brainDesignerView: document.getElementById('brainDesignerView'),
+        brainDesignerButton: document.getElementById('brainDesignerButton'),
+        brainBackButton: document.getElementById('brainBackButton'),
+        addHiddenLayerButton,
+        hiddenLayersList,
+        brainSpeciesSelect: document.getElementById('brainSpeciesSelect'),
+        brainColourPicker: document.getElementById('brainColourPicker'),
+        brainDesignerCanvas: document.getElementById('brainDesignerCanvas'),
+        brainDesignerTooltip,
+        spawnCountInput: document.getElementById('spawnCountInput'),
+        spawnWithBrainButton: document.getElementById('spawnWithBrainButton'),
+        statusEl,
+        simView: document.getElementById('simView'),
+        settingsView: document.getElementById('settingsView'),
+        startLoop,
+        stopLoop,
+    });
 
     charts.initCharts(document.getElementById('populationChart').getContext('2d'), document.getElementById('agePyramidChart').getContext('2d'));
 

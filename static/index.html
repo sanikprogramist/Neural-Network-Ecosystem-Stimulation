@@ -189,6 +189,7 @@
             <button id="saveBrainButton" disabled style="background-color: #e8f4f8; color: #0366d6;">Save Brain</button>
             <button id="loadBrainButton" disabled style="background-color: #e8f4f8; color: #0366d6;">Load Brain</button>
             <button id="killButton" disabled style="background-color: #ffeef0; color: #d73a49; border-color: #cea0a5;">Kill Selected</button>
+            <button id="brainDesignerButton" style="background-color: #7c3aed;">Brain Designer</button>
             <button id="settingsButton">Simulation Settings</button>
             <input type="file" id="loadInput" accept=".pkl" style="display:none">
             <input type="file" id="loadBrainInput" accept=".pkl" style="display:none">
@@ -428,6 +429,43 @@
             document.getElementById('tab-' + name).classList.add('active');
             }
         </script>
+    </div>
+
+    <div id="brainDesignerView" style="display: none; background: white; padding: 20px; border: 1px solid #d0d7de; border-radius: 8px; max-width: 1000px;">
+        <h2 style="margin-bottom: 4px; color: #6b21a8;">Brain Designer</h2>
+        <p style="color: #666; margin-bottom: 12px;">Design a brain (placeholder). Select species, pick colour, then spawn.</p>
+
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:12px;">
+            <label style="font-weight:700;">Species:</label>
+            <select id="brainSpeciesSelect">
+                <option value="herbivore">Herbivore</option>
+                <option value="predator">Predator</option>
+            </select>
+
+            <label style="font-weight:700; margin-left: 18px;">Colour:</label>
+            <input type="color" id="brainColourPicker" value="#ff0000">
+        </div>
+
+        <div id="brainTopologyControls" style="display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+            <button id="addHiddenLayerButton" style="background-color:#2563eb;">Add Hidden Layer</button>
+            <div id="hiddenLayersList" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;"></div>
+        </div>
+
+        <div style="position: relative; display:flex; gap:16px;">
+            <canvas id="brainDesignerCanvas" width="900" height="420" style="background: #ffffff; border-radius:8px; box-shadow: 0 6px 20px rgba(0,0,0,0.06);"></canvas>
+            <div id="brainDesignerTooltip" style="position:absolute; display:none; pointer-events:none; background:#111827; color:white; padding:8px 10px; border-radius:10px; font-size:13px; box-shadow:0 10px 20px rgba(15,23,42,0.18); z-index:10;"></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+            <div>
+                <label style="font-weight:600; margin-right:8px;">Spawn count:</label>
+                <input id="spawnCountInput" type="number" min="1" value="1" style="width:72px;">
+            </div>
+            <div>
+                <button id="brainBackButton" style="background-color: #686868; margin-right:8px;">Go Back</button>
+                <button id="spawnWithBrainButton" style="background-color: #0ea5a0;">Spawn X animals with this brain</button>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="/static/main.js"></script>

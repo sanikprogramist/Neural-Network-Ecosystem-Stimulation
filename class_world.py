@@ -14,16 +14,9 @@ from class_animal_brain_nn import *
 # 19. brain designer tab? 
 # 23. may be too complicated - skip connections - for a real NEAT lagorithm
 # 24. new chart - brain complexity
-# 25. replace speed as an input.
-# 26. before brain designer tab - save/load brain pickles and inject them into existing animals. maybe even spawn new animals button 
-
-# load brain and kill has to have draw state called again
 
 #since last commit:
-# spawn buttons
-# icon
-# world updates drawn state when a variety of buttons occur
-
+# brain designer placeholder pane
 
 class World:
 
