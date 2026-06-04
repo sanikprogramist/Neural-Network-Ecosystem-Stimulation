@@ -299,3 +299,73 @@ def select_animal(data: dict):
 def kill_selected_animal():
     success = world.debug_kill()
     return {"status": "success", "message": "Selected agent terminated successfully"}
+
+@app.get("/save_brain")
+def save_brain():
+    """Save the brain of the currently selected animal as a pickle file"""
+    if world.selected_herbivore_index is not None:
+        if world.alive_herbivore_array[world.selected_herbivore_index]:
+            brain = world.herbivore_brains[world.selected_herbivore_index]
+            buf = io.BytesIO()
+            pickle.dump(brain, buf)
+            buf.seek(0)
+            return StreamingResponse(
+                buf,
+                media_type="application/octet-stream",
+                headers={"Content-Disposition": "attachment; filename=herbivore_brain.pkl"}
+            )
+    
+    elif world.selected_predator_index is not None:
+        if world.alive_predator_array[world.selected_predator_index]:
+            brain = world.predator_brains[world.selected_predator_index]
+            buf = io.BytesIO()
+            pickle.dump(brain, buf)
+            buf.seek(0)
+            return StreamingResponse(
+                buf,
+                media_type="application/octet-stream",
+                headers={"Content-Disposition": "attachment; filename=predator_brain.pkl"}
+            )
+    
+    return {"error": "No animal selected"}
+
+@app.post("/load_brain")
+async def load_brain(file: UploadFile = File(...)):
+    """Load a brain pickle file and inject it into the currently selected animal"""
+    global world
+    
+    # Check if an animal is selected
+    if world.selected_herbivore_index is None and world.selected_predator_index is None:
+        return {"error": "No animal selected"}
+    
+    # Check if the selected animal is still alive
+    herbivore_selected = world.selected_herbivore_index is not None and world.alive_herbivore_array[world.selected_herbivore_index]
+    predator_selected = world.selected_predator_index is not None and world.alive_predator_array[world.selected_predator_index]
+    
+    if not (herbivore_selected or predator_selected):
+        return {"error": "Selected animal is no longer alive"}
+    
+    try:
+        data = await file.read()
+        brain = pickle.load(io.BytesIO(data))
+        
+        # Verify it's an AnimalBrain object
+        from class_animal_brain_nn import AnimalBrain
+        if not isinstance(brain, AnimalBrain):
+            return {"error": "This is not a brain file. Please upload a valid AnimalBrain pickle file."}
+        
+        # Inject the brain into the selected animal
+        if herbivore_selected and brain.species == "herbivore":
+            world.herbivore_brains[world.selected_herbivore_index] = brain
+            return {"success": True, "message": f"Brain loaded into herbivore {world.selected_herbivore_index}"}
+        elif predator_selected and brain.species == "predator":
+            world.predator_brains[world.selected_predator_index] = brain
+            return {"success": True, "message": f"Brain loaded into predator {world.selected_predator_index}"}
+        else:
+            return {"error": "The brain file doesn't match the selected animal species."}
+
+    
+    except pickle.UnpicklingError:
+        return {"error": "This is not a brain file. Please upload a valid AnimalBrain pickle file."}
+    except Exception as e:
+        return {"error": f"Error loading brain: {str(e)}"}

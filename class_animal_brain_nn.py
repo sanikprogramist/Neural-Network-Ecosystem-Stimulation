@@ -23,7 +23,8 @@ class AnimalBrain(nn.Module):
         n_self_infos: int,
         hidden_dims: list = [],  # Pass a list like [12, 12, 18] or [6] or []
         initial_weight_std: float = 0.1,
-        initial_bias_std: float = 0.05
+        initial_bias_std: float = 0.05,
+        species: str = "forgot_to_specify_species_of_brain"
     ):
         """
         Parameters
@@ -53,6 +54,7 @@ class AnimalBrain(nn.Module):
         """
 
         super().__init__()
+        self.species = species
         self.input_dim = n_external_infos + n_self_infos
         # Output: [forward_speed, angular_velocity]
         self.output_dim = 2

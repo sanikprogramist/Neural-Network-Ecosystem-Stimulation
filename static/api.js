@@ -58,6 +58,16 @@ export async function saveSimulation() {
     window.location.href = '/save';
 }
 
+export async function saveBrain() {
+    // navigate to save_brain endpoint
+    window.location.href = '/save_brain';
+}
+
+export async function uploadLoadBrainForm(formData) {
+    const res = await fetch('/load_brain', { method: 'POST', body: formData });
+    return res.json();
+}
+
 export async function debugKillSelected() {
     return fetch('/debug_kill_selected', { method: 'POST' });
 }

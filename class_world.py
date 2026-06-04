@@ -720,7 +720,8 @@ class World:
                         n_external_infos=self.herbivore_num_external_infos,
                         n_self_infos=self.herbivore_self_infos,
                         hidden_dims=random_dims,
-                        initial_weight_std=self.weight_std_for_new_neurons
+                        initial_weight_std=self.weight_std_for_new_neurons,
+                        species = "herbivore"
                     )
             
             else: #spawning from a parent
@@ -1156,7 +1157,8 @@ class World:
                         n_external_infos=self.predator_num_external_infos,
                         n_self_infos=self.predator_self_infos,
                         hidden_dims=random_dims,
-                        initial_weight_std=self.weight_std_for_new_neurons
+                        initial_weight_std=self.weight_std_for_new_neurons,
+                        species = "predator"
                     )
             
             else: #spawning from a parent

@@ -18,6 +18,9 @@ export function initUI() {
     const loadInput = document.getElementById('loadInput');
     const loadButton = document.getElementById('loadButton');
     const killButton = document.getElementById('killButton');
+    const saveBrainButton = document.getElementById('saveBrainButton');
+    const loadBrainButton = document.getElementById('loadBrainButton');
+    const loadBrainInput = document.getElementById('loadBrainInput');
     const downloadChartDataButton = document.getElementById('downloadChartDataButton');
     const settingsButton = document.getElementById('settingsButton');
     const backButton = document.getElementById('backButton');
@@ -33,6 +36,7 @@ export function initUI() {
             const state = await api.stepWorld(dt);
             lastState = state;
             drawState(state, canvas, networkCanvas, statsEl);
+            updateBrainButtonStates(lastState);
         } catch (err) {
             statusEl.textContent = 'Error updating simulation — retrying...';
             console.error('Tick error:', err);
@@ -66,6 +70,7 @@ export function initUI() {
             const state = await api.stepWorld(0.04);
             lastState = state;
             drawState(state, canvas, networkCanvas, statsEl);
+            updateBrainButtonStates(lastState);
         } catch (error) {
             statusEl.textContent = 'Error during step';
             console.error('Step error:', error);
@@ -86,6 +91,40 @@ export function initUI() {
 
     killButton.addEventListener('click', async () => { await api.debugKillSelected(); });
 
+    saveBrainButton.addEventListener('click', () => api.saveBrain());
+
+    loadBrainButton.addEventListener('click', () => loadBrainInput.click());
+    loadBrainInput.addEventListener('change', async () => {
+        const file = loadBrainInput.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const result = await api.uploadLoadBrainForm(formData);
+            if (result.success) {
+                statusEl.textContent = result.message;
+                // Reload state to show updated brain
+                const state = await api.fetchState();
+                lastState = state;
+                drawState(state, canvas, networkCanvas, statsEl);
+                updateBrainButtonStates(lastState);
+            } else {
+                statusEl.textContent = 'Error: ' + result.error;
+            }
+        } catch (error) {
+            statusEl.textContent = 'Error loading brain: ' + error.message;
+            console.error('Brain load error:', error);
+        }
+        // Reset the input so the same file can be selected again
+        loadBrainInput.value = '';
+    });
+
+    function updateBrainButtonStates(state) {
+        const hasSelection = state && state.selected && state.selected.species && state.selected.id !== undefined;
+        saveBrainButton.disabled = !hasSelection;
+        loadBrainButton.disabled = !hasSelection;
+    }
+
     canvas.addEventListener('click', async (event) => {
         if (!lastState) return;
         const rect = canvas.getBoundingClientRect();
@@ -104,12 +143,14 @@ export function initUI() {
         if (!selection) {
             await api.sendSelection(null, null);
             drawState(lastState, canvas, networkCanvas, statsEl);
+            updateBrainButtonStates(lastState);
             return;
         }
 
         if (lastState.selected && lastState.selected.species === selection.species && lastState.selected.id === selection.id) {
             await api.sendSelection(null, null);
             drawState(lastState, canvas, networkCanvas, statsEl);
+            updateBrainButtonStates(lastState);
             return;
         }
 
@@ -117,6 +158,7 @@ export function initUI() {
         if (!running) {
             const temp = await api.stepWorld(0.001);
             drawState(temp, canvas, networkCanvas, statsEl);
+            updateBrainButtonStates(temp);
         }
     });
 
@@ -161,6 +203,7 @@ export function initUI() {
             const state = await api.fetchState();
             lastState = state;
             drawState(state, canvas, networkCanvas, statsEl);
+            updateBrainButtonStates(lastState);
             document.getElementById('stats').innerHTML = '<div class="empty-stats-msg">Click an animal to view its stats and neural network brain.</div>';
         } catch (error) {
             statusEl.textContent = 'Unable to load simulation state.';
