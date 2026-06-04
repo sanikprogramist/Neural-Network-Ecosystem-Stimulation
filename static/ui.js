@@ -18,6 +18,8 @@ export function initUI() {
     const loadInput = document.getElementById('loadInput');
     const loadButton = document.getElementById('loadButton');
     const killButton = document.getElementById('killButton');
+    const spawnHerbivoresButton = document.getElementById('spawnHerbivoresButton');
+    const spawnPredatorsButton = document.getElementById('spawnPredatorsButton');
     const saveBrainButton = document.getElementById('saveBrainButton');
     const loadBrainButton = document.getElementById('loadBrainButton');
     const loadBrainInput = document.getElementById('loadBrainInput');
@@ -89,7 +91,29 @@ export function initUI() {
         location.reload();
     });
 
-    killButton.addEventListener('click', async () => { await api.debugKillSelected(); });
+    killButton.addEventListener('click', async () => { await api.debugKillSelected(); 
+        const state = await api.stepWorld(0.0001);
+        lastState = state;
+        drawState(state, canvas, networkCanvas, statsEl);
+    });
+
+    spawnHerbivoresButton.addEventListener('click', async () => {
+        const result = await api.spawnRandomHerbivores();
+        statusEl.textContent = result.message || 'Spawned 5 herbivores.';
+        const state = await api.fetchState();
+        lastState = state;
+        drawState(state, canvas, networkCanvas, statsEl);
+        updateBrainButtonStates(state);
+    });
+
+    spawnPredatorsButton.addEventListener('click', async () => {
+        const result = await api.spawnRandomPredators();
+        statusEl.textContent = result.message || 'Spawned 5 predators.';
+        const state = await api.fetchState();
+        lastState = state;
+        drawState(state, canvas, networkCanvas, statsEl);
+        updateBrainButtonStates(state);
+    });
 
     saveBrainButton.addEventListener('click', () => api.saveBrain());
 
@@ -104,7 +128,7 @@ export function initUI() {
             if (result.success) {
                 statusEl.textContent = result.message;
                 // Reload state to show updated brain
-                const state = await api.fetchState();
+                const state = await api.stepWorld(0.0001);
                 lastState = state;
                 drawState(state, canvas, networkCanvas, statsEl);
                 updateBrainButtonStates(lastState);
@@ -123,6 +147,7 @@ export function initUI() {
         const hasSelection = state && state.selected && state.selected.species && state.selected.id !== undefined;
         saveBrainButton.disabled = !hasSelection;
         loadBrainButton.disabled = !hasSelection;
+        killButton.disabled = !hasSelection;
     }
 
     canvas.addEventListener('click', async (event) => {
@@ -142,6 +167,7 @@ export function initUI() {
         const selection = candidates.find(item => item.distance <= captureDistance);
         if (!selection) {
             await api.sendSelection(null, null);
+            lastState.selected = null;
             drawState(lastState, canvas, networkCanvas, statsEl);
             updateBrainButtonStates(lastState);
             return;
@@ -149,6 +175,7 @@ export function initUI() {
 
         if (lastState.selected && lastState.selected.species === selection.species && lastState.selected.id === selection.id) {
             await api.sendSelection(null, null);
+            lastState.selected = null;
             drawState(lastState, canvas, networkCanvas, statsEl);
             updateBrainButtonStates(lastState);
             return;
@@ -156,7 +183,8 @@ export function initUI() {
 
         await api.sendSelection(selection.species, selection.id);
         if (!running) {
-            const temp = await api.stepWorld(0.001);
+            const temp = await api.stepWorld(0.0001);
+            lastState = temp;
             drawState(temp, canvas, networkCanvas, statsEl);
             updateBrainButtonStates(temp);
         }

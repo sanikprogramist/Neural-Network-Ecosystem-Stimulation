@@ -198,6 +198,7 @@ def mutate_brain_architecture(
     """
     hidden_dims = list(brain.get_dim_sizes())
     structural_change_score = 0.0
+    species = brain.species
     
     # 1. Determine New Dimensions and explicitly save lists of surviving indices
     # We keep track of the *exact* original indices that survived for each layer
@@ -238,7 +239,8 @@ def mutate_brain_architecture(
         n_external_infos=brain.input_dim,
         n_self_infos=0, 
         hidden_dims=new_dims,
-        initial_weight_std=init_std
+        initial_weight_std=init_std,
+        species=species
     )
     
     # 3. Transfer Weights step-by-step

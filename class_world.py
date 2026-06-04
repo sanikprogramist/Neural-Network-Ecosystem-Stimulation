@@ -17,10 +17,12 @@ from class_animal_brain_nn import *
 # 25. replace speed as an input.
 # 26. before brain designer tab - save/load brain pickles and inject them into existing animals. maybe even spawn new animals button 
 
-
+# load brain and kill has to have draw state called again
 
 #since last commit:
-# fixed resurrect bug
+# spawn buttons
+# icon
+# world updates drawn state when a variety of buttons occur
 
 
 class World:
@@ -109,7 +111,7 @@ class World:
         self.herbivore_detectable_object_types = 3 # plant, conspecific, predator
         self.herbivore_types_of_info_about_each_object = 2 # distance and angle to it
         self.herbivore_num_external_infos = self.herbivore_detectable_object_types * self.herbivore_types_of_info_about_each_object
-        self.herbivore_self_infos = 2 # speed and satiety
+        self.herbivore_self_infos = 3 # hunger (1-satiety), age, gestation
         self.herbivore_nn_inputs = np.zeros((self.max_herbivore, (self.herbivore_num_external_infos + self.herbivore_self_infos)),dtype=np.float32)
         #i dont know why but this is required still by app.js
         self.selected_herbivore_nn_hdim1 = None
@@ -136,7 +138,7 @@ class World:
         self.predator_detectable_object_types = 2 # herbivore (food), conspecific
         self.predator_types_of_info_about_each_object = 2 # distance and angle to it
         self.predator_num_external_infos = self.predator_detectable_object_types * self.predator_types_of_info_about_each_object
-        self.predator_self_infos = 2 # speed and satiety
+        self.predator_self_infos = 3 # hunger, age, gestation
         self.predator_nn_inputs = np.zeros((self.max_predator, (self.predator_num_external_infos + self.predator_self_infos)),dtype=np.float32)
         self.selected_predator_nn_hdim1 = None
         self.selected_predator_nn_hdim2 = None
@@ -566,7 +568,9 @@ class World:
         )
 
         self.herbivore_nn_inputs[alive_indices,0:self.herbivore_num_external_infos] = output_from_perception_function
-        self.herbivore_nn_inputs[alive_indices,self.herbivore_num_external_infos:self.herbivore_num_external_infos+2] = np.stack((1-(self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety), self.herbivore_speeds[alive_indices] / self.max_speed), axis=1)
+        self.herbivore_nn_inputs[alive_indices,self.herbivore_num_external_infos:self.herbivore_num_external_infos+self.herbivore_self_infos] = np.stack((1-(self.herbivore_satiety[alive_indices] / self.herbivore_max_satiety), 
+                                                                                                                                                        self.herbivore_ages[alive_indices] / self.herbivore_life_expectancy[alive_indices],
+                                                                                                                                                        self.herbivore_reproduction_timers[alive_indices] / self.herbivore_gestation_time_reqs[alive_indices]), axis=1)
 
     def herbivores_process_NN(self, dt):
         alive_indices = np.where(self.alive_herbivore_array)[0]
@@ -997,7 +1001,9 @@ class World:
         )
 
         self.predator_nn_inputs[alive_indices,0:self.predator_num_external_infos] = output_from_perception_function
-        self.predator_nn_inputs[alive_indices,self.predator_num_external_infos:self.predator_num_external_infos+2] = np.stack((1-(self.predator_satiety[alive_indices] / self.predator_max_satiety), self.predator_speeds[alive_indices] / self.max_speed), axis=1)
+        self.predator_nn_inputs[alive_indices,self.predator_num_external_infos:self.predator_num_external_infos+self.predator_self_infos] = np.stack((1-(self.predator_satiety[alive_indices] / self.predator_max_satiety), 
+                                                                                                                            self.predator_ages[alive_indices] / self.predator_life_expectancy[alive_indices],
+                                                                                                                            self.predator_reproduction_timers[alive_indices] / self.predator_gestation_time_reqs[alive_indices]), axis=1)
 
     def predators_process_NN(self, dt):
         alive_indices = np.where(self.alive_predator_array)[0]

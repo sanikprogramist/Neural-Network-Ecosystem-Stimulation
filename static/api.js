@@ -58,6 +58,16 @@ export async function saveSimulation() {
     window.location.href = '/save';
 }
 
+export async function spawnRandomHerbivores() {
+    const res = await fetch('/spawn_random_herbivores', { method: 'POST' });
+    return res.json();
+}
+
+export async function spawnRandomPredators() {
+    const res = await fetch('/spawn_random_predators', { method: 'POST' });
+    return res.json();
+}
+
 export async function saveBrain() {
     // navigate to save_brain endpoint
     window.location.href = '/save_brain';

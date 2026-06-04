@@ -300,6 +300,16 @@ def kill_selected_animal():
     success = world.debug_kill()
     return {"status": "success", "message": "Selected agent terminated successfully"}
 
+@app.post("/spawn_random_herbivores")
+def spawn_random_herbivores():
+    world.spawn_herbivore(5, parent_index=-1)
+    return {"success": True, "message": "Spawned 5 random herbivores"}
+
+@app.post("/spawn_random_predators")
+def spawn_random_predators():
+    world.spawn_predator(5, parent_index=-1)
+    return {"success": True, "message": "Spawned 5 random predators"}
+
 @app.get("/save_brain")
 def save_brain():
     """Save the brain of the currently selected animal as a pickle file"""

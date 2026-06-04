@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ecosystem Simulation</title>
+    <link rel="icon" type="image/x-icon" href="/static/web_icon4.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -167,6 +168,11 @@
     input[type=range] {
         accent-color: #3b82f6;
     }
+
+    button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
     </style>
 </head>
 <body>
@@ -178,9 +184,11 @@
             <button id="stepButton">Step</button>
             <button id="saveButton">Save</button>
             <button id="loadButton">Load</button>
-            <button id="killButton" style="background-color: #ffeef0; color: #d73a49; border-color: #cea0a5;">Kill Selected</button>
+            <button id="spawnHerbivoresButton" style="background-color: #ecfdf5; color: #166534;">Spawn 5 Herbivores</button>
+            <button id="spawnPredatorsButton" style="background-color: #f0f9ff; color: #9e220a;">Spawn 5 Predators</button>
             <button id="saveBrainButton" disabled style="background-color: #e8f4f8; color: #0366d6;">Save Brain</button>
             <button id="loadBrainButton" disabled style="background-color: #e8f4f8; color: #0366d6;">Load Brain</button>
+            <button id="killButton" disabled style="background-color: #ffeef0; color: #d73a49; border-color: #cea0a5;">Kill Selected</button>
             <button id="settingsButton">Simulation Settings</button>
             <input type="file" id="loadInput" accept=".pkl" style="display:none">
             <input type="file" id="loadBrainInput" accept=".pkl" style="display:none">
