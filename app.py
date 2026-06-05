@@ -1,7 +1,11 @@
 import pickle
 import io
+import copy
 from pathlib import Path
 from typing import Optional
+
+import numpy as np
+import torch
 
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
@@ -9,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from class_world import World
+from class_animal_brain_nn import AnimalBrain
 
 app = FastAPI(title="Ecosystem Simulation API")
 static_dir = Path(__file__).resolve().parent / "static"
@@ -309,6 +314,95 @@ def spawn_random_herbivores():
 def spawn_random_predators():
     world.spawn_predator(5, parent_index=-1)
     return {"success": True, "message": "Spawned 5 random predators"}
+
+@app.post("/spawn_with_brain")
+def spawn_with_brain(data: dict):
+    """Spawn animals with a designed brain topology and weights"""
+    global world
+    
+    try:
+        species = data.get("species", "herbivore")
+        hidden_dims = data.get("hiddenDims", [])
+        weights_data = data.get("weights", [])
+        biases_data = data.get("biases", [])
+        spawn_count = data.get("spawnCount", 1)
+        color_hex = data.get("color", "#808080")
+        
+        # Parse hex color to RGB
+        color_hex = color_hex.lstrip('#')
+        color = np.array([int(color_hex[i:i+2], 16) for i in (0, 2, 4)], dtype=np.uint8)
+        
+        # Determine input/output sizes
+        if species == "herbivore":
+            n_external = world.herbivore_num_external_infos
+            n_self = world.herbivore_self_infos
+            before_count = int(np.sum(world.alive_herbivore_array))
+        else:
+            n_external = world.predator_num_external_infos
+            n_self = world.predator_self_infos
+            before_count = int(np.sum(world.alive_predator_array))
+        
+        # Create brain with designed topology
+        brain_template = AnimalBrain(
+            n_external_infos=n_external,
+            n_self_infos=n_self,
+            hidden_dims=hidden_dims,
+            initial_weight_std=world.weight_std_for_new_neurons,
+            species=species
+        )
+        
+        # Set weights from frontend data
+        # Frontend stores as weights[layer][from_neuron][to_neuron]
+        # PyTorch Linear expects weight matrix as (out_features, in_features)
+        # So we need to transpose each layer's weight matrix
+        for layer_idx, layer in enumerate(brain_template.layers):
+            if layer_idx < len(weights_data):
+                # Transpose the weight matrix to match PyTorch's (out, in) format
+                w_np = np.array(weights_data[layer_idx], dtype=np.float32)
+                w_transposed = np.transpose(w_np)  # Now shape (out_features, in_features)
+                w = torch.tensor(w_transposed, dtype=torch.float32)
+                layer.weight.data = w
+        
+        # Handle output layer weights
+        if len(weights_data) > len(brain_template.layers):
+            w_np = np.array(weights_data[len(brain_template.layers)], dtype=np.float32)
+            w_transposed = np.transpose(w_np)
+            w = torch.tensor(w_transposed, dtype=torch.float32)
+            brain_template.out.weight.data = w
+
+        # Set biases from frontend data
+        for layer_idx, layer in enumerate(brain_template.layers):
+            if layer_idx < len(biases_data):
+                b = torch.tensor(np.array(biases_data[layer_idx], dtype=np.float32), dtype=torch.float32)
+                layer.bias.data = b
+        if len(biases_data) > len(brain_template.layers):
+            b = torch.tensor(np.array(biases_data[len(brain_template.layers)], dtype=np.float32), dtype=torch.float32)
+            brain_template.out.bias.data = b
+
+        # Spawn and assign brains
+        if species == "herbivore":
+            world.spawn_herbivore(spawn_count, parent_index=-1)
+            after_count = int(np.sum(world.alive_herbivore_array))
+            newly_spawned_count = after_count - before_count
+            alive_indices = np.where(world.alive_herbivore_array)[0]
+            for i in range(newly_spawned_count):
+                idx = alive_indices[-(i+1)]
+                world.herbivore_brains[idx] = copy.deepcopy(brain_template)
+                world.herbivore_colours[idx] = color
+        else:
+            world.spawn_predator(spawn_count, parent_index=-1)
+            after_count = int(np.sum(world.alive_predator_array))
+            newly_spawned_count = after_count - before_count
+            alive_indices = np.where(world.alive_predator_array)[0]
+            for i in range(newly_spawned_count):
+                idx = alive_indices[-(i+1)]
+                world.predator_brains[idx] = copy.deepcopy(brain_template)
+                world.predator_colours[idx] = color
+        
+        return {"success": True, "message": f"Spawned {newly_spawned_count} {species}(es) with designed brain"}
+    
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/save_brain")
 def save_brain():

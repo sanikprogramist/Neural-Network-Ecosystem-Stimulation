@@ -16,7 +16,7 @@ from class_animal_brain_nn import *
 # 24. new chart - brain complexity
 
 #since last commit:
-# brain designer placeholder pane
+# brain designer tab weight and topology editing.
 
 class World:
 
@@ -716,7 +716,7 @@ class World:
                     self.herbivore_brains[idx] = AnimalBrain(
                         n_external_infos=self.herbivore_num_external_infos,
                         n_self_infos=self.herbivore_self_infos,
-                        hidden_dims=random_dims,
+                        hidden_dims=random_dims, 
                         initial_weight_std=self.weight_std_for_new_neurons,
                         species = "herbivore"
                     )
