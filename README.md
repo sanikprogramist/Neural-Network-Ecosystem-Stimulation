@@ -118,10 +118,16 @@ A few directions that didn't make the cut but remain genuinely interesting:
 
 ---
 
-## Running the Simulation INCOMPLETE
+## Running the Simulation yourself
+
+Clone the repo, create a virtual environment (if you want), then:
 
 ```bash
 # Install dependencies
-pip install numpy torch fastapi uvicorn
+pip install -r requirements.txt
 
+# Start the simulation server
+uvicorn app:app --reload
+
+#Then open your browser to http://localhost:8000
 ```
