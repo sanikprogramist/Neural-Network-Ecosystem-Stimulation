@@ -10,7 +10,11 @@ from class_animal_brain_nn import *
 # 1. fitness is exploitable but i dont know how to fix it. It probably will always be exploitable
 # 24. new chart - brain complexity
 
-#since last commit:
+#improve readme:
+# make requirements.txt
+# finish instructions for running server
+
+
 
 #IF I had more time/resources:
 # Implement proper NEAT algorithm and skip connections

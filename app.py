@@ -1,7 +1,6 @@
 import pickle
 import io
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
