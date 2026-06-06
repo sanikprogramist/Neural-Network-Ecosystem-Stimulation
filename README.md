@@ -2,7 +2,7 @@
 
 An agent-based ecosystem where predators and herbivores develop emergent survival behaviours entirely through neuroevolution — no hand-crafted rules, no reinforcement learning rewards. Just mutation, selection pressure, and time.
 
-![Full Simulation](screenshots/full_website_visuals_and_controls_screenshot.jpg)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/full_website_visuals_and_controls_screenshot.JPG" width="800">
 
 ---
 
@@ -23,27 +23,27 @@ Here are some example of behaviours that I have seen emerge in my sessions:
 ### Herbivore Flocking
 Herbivores discovered travelling as groups — a direct analogue of real-world anti-predator herding.
 
-![Herbivores travelling as a group](screenshots/herbivores_travel_as_a_group_gif.gif)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/herbivores_travel_as_a_group_gif.gif" width="400">
 
 ### Predator Evasion
 Herbivore brains learned swerve and flee nearby predators. They are not perfect though - some still get eaten!
 
-![Herbivores avoiding predators](screenshots/herbivores_trying_to_avoid_predators_gif.gif)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/herbivores_trying_to_avoid_predators_gif.gif" width="400">
 
 ### Predators Huntings
 Predators evolved being almost motionless when they dont detect any prey to conserve energy, then pouncing on the prey that enters its vision range!
 
-![Predators hunting herbivores](screenshots/predators_hunting_herbivores_gif.gif)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/predators_hunting_herbivores_gif.gif" width="400">
 
 ### Predators Camping in the bushes
 Predator groups that stake out dense plant patches and wait for herbivores to arrive, rather than expending energy on active pursuit.
 
-![Predators camping in plant patches](screenshots/group_of_predators_camping_in_a_large_patch_of_plants_gif.gif)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/group_of_predators_camping_in_a_large_patch_of_plants_gif.gif" width="400">
 
 ### Lotka-Volterra Population Dynamics
 The simulation spontaneously reproduces the classic predator-prey population cycle — predator numbers lag behind prey, both oscillating in a self-sustaining rhythm. 
 
-![Lotka-Volterra population cycle](screenshots/lotka_volterra_population_cycle_screenshot.jpg)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/lotka_volterra_population_cycle_screenshot.JPG" width="500">
 
 ### Neural Network Visualisation
 Each animal's brain can be inspected in real time, showing live activation as it navigates the world.
@@ -53,7 +53,7 @@ Each animal's brain can be inspected in real time, showing live activation as it
 ### Brain Designer
 Networks can be seeded or modified manually through a visual brain designer interface. You can have a go at creating your own neural network brain, and see how it survives!
 
-![Brain designer](screenshots/brain_designer_screenshot.jpg)
+<img src="https://raw.githubusercontent.com/sanikprogramist/Neural-Network-Ecosystem-Stimulation/main/screenshots/brain_designer_screenshot.JPG" width="700">
 
 ---
 
