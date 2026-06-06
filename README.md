@@ -1,76 +1,127 @@
-# OUTDATED README Ecosystem Simulation
+# 🧬 Evolving Ecosystem Simulation
 
-This project simulates an evolving ecosystem with herbivores, predators, and plants using neural networks and genetic algorithms. The simulation now supports a web-based frontend via FastAPI, with the legacy Pygame UI available separately.
+An agent-based ecosystem where predators and herbivores develop emergent survival behaviours entirely through neuroevolution — no hand-crafted rules, no reinforcement learning rewards. Just mutation, selection pressure, and time.
 
-## Features
+![Full Simulation](screenshots/full_website_visuals_and_controls_screenshot.jpg)
 
-- Herbivores and predators controlled by neural networks
-- Evolution via mutation and reproduction
-- Real-time visualization with Pygame
-- Population and fitness plots using Matplotlib
-- Interactive selection and stats display for individual animals
+---
 
-## Getting Started
+## The Core Idea
 
-### Prerequisites
+Every animal in this simulation has a neural network for a brain. At the start, these networks are essentially random — the animals stumble around, achieve nothing, and die. But across generations, random mutations to network weights and topology compound into something genuinely surprising: coordinated group behaviour, predator evasion strategies, and population dynamics that mirror real ecological theory.
 
-- Python 3.10+
-- Required packages: `numpy`, `pandas`, `torch`, `scipy`, `fastapi`, `uvicorn`
+The evolution engine is a custom implementation of **NEAT (NeuroEvolution of Augmenting Topologies)** — an algorithm that evolves not just the weights of a fixed network, but the structure of the network itself. Hidden neurons appear, connections are rewired, and each generation's survivors pass their neural architecture — plus mutations — to the next.
 
-Install dependencies with:
+There are no training labels. No reward functions tuned by hand. The only feedback is survival and reproduction.
 
-```sh
-pip install numpy pandas torch scipy fastapi uvicorn
+---
+
+## Emergent Behaviours
+
+Here are some example of behaviours that I have seen emerge in my sessions:
+
+### Herbivore Flocking
+Herbivores discovered travelling as groups — a direct analogue of real-world anti-predator herding.
+
+![Herbivores travelling as a group](screenshots/herbivores_travel_as_a_group_gif.gif)
+
+### Predator Evasion
+Herbivore brains learned swerve and flee nearby predators. They are not perfect though - some still get eaten!
+
+![Herbivores avoiding predators](screenshots/herbivores_trying_to_avoid_predators_gif.gif)
+
+### Predators Huntings
+Predators evolved being almost motionless when they dont detect any prey to conserve energy, then pouncing on the prey that enters its vision range!
+
+![Predators hunting herbivores](screenshots/predators_hunting_herbivores_gif.gif)
+
+### Predators Camping in the bushes
+Predator groups that stake out dense plant patches and wait for herbivores to arrive, rather than expending energy on active pursuit.
+
+![Predators camping in plant patches](screenshots/group_of_predators_camping_in_a_large_patch_of_plants_gif.gif)
+
+### Lotka-Volterra Population Dynamics
+The simulation spontaneously reproduces the classic predator-prey population cycle — predator numbers lag behind prey, both oscillating in a self-sustaining rhythm. 
+
+![Lotka-Volterra population cycle](screenshots/lotka_volterra_population_cycle_screenshot.jpg)
+
+### Neural Network Visualisation
+Each animal's brain can be inspected in real time, showing live activation as it navigates the world.
+
+![Neural network visualisation](screenshots/neural_network_visualisation_gif.gif)
+
+### Brain Designer
+Networks can be seeded or modified manually through a visual brain designer interface. You can have a go at creating your own neural network brain, and see how it survives!
+
+![Brain designer](screenshots/brain_designer_screenshot.jpg)
+
+---
+
+## How the Evolution Works
+
+Each animal's genome encodes a neural network. On reproduction (currently asexual — each animal buds off a mutated copy), the offspring receives its parent's network with random perturbations applied:
+
+- **Weight mutation** — existing connection strengths shift by small random amounts
+- **Structural augmentation** — new neurons and connections can be inserted, expanding the network's representational capacity over generations
+
+This is the NEAT approach: topology and weights co-evolve, so the network complexity of a successful lineage grows organically rather than being fixed at initialisation.
+
+The current architecture connects every neuron in each layer to every neuron in the next (fully connected, layer-by-layer). Skip connections — direct links from earlier layers to later ones, bypassing intermediate layers — are a planned extension.
+
+---
+
+## Tech Stack
+
+**Backend — Python simulation server**
+- `NumPy` + vectorisation — performant batch simulation of all agents each tick
+- `PyTorch` — neural network forward passes and weight storage
+- `FastAPI` + `Uvicorn` — REST API serving simulation state to the frontend
+- `Pickle` / `pathlib` — save/load of simulation states and evolved genomes
+
+**Frontend — Browser visualisation**
+- `JavaScript` + `HTML/Canvas` — real-time rendering of the simulation world
+- Web controls for parameters, speed, and inspection of individual agents
+
+**Tooling**
+- Agentic AI helped me a lot for frontend visualisation. The prevoius versions of this were in pygame, so I am happy to see the much prettier js visualisation.
+
+---
+
+## What I Learned Building This
+
+Going in, I knew Python reasonably well. Coming out, I'd built working knowledge of:
+
+- **Neural network fundamentals** — forward passes, activation functions, weight representations
+- **The NEAT algorithm** — why evolving topology matters, and the non-trivial implementation challenges
+- **PyTorch** — tensor operations, network construction, and how to use it beyond training pipelines
+- **NumPy vectorisation** — rewriting naive loops as batch operations to keep the simulation running at interactive speeds with many simultaneous agents
+- **FastAPI** — async server design, routing, and serving a stateful simulation over HTTP
+- **JavaScript** — enough to build a functional, interactive frontend from scratch
+
+The hardest part wasn't any single component — it was making all of them talk to each other at speed without the simulation grinding to a halt as agent counts grew.
+
+---
+
+## Possible Extensions
+
+A few directions that didn't make the cut but remain genuinely interesting:
+
+**Hosting** — Deploying this so anyone could run it in a browser is straightforward in principle: unique session IDs per user, a high-performance server to handle parallel simulations. The harder alternative would be porting the Python simulation server to JavaScript — attractive for a serverless setup, but NumPy and PyTorch have no direct JS equivalents, making matrix operations non-trivial to replicate at the same performance level.
+
+**True NEAT with skip connections** — The current implementation is fully-connected layer-to-layer. Real NEAT allows arbitrary skip connections between any two neurons, which enables richer representational shortcuts and is closer to biological neural wiring. The implementation complexity is significant, but the behavioural payoff could be substantial.
+
+**Sexual reproduction** — Current reproduction is asexual (parent → mutated copy). Crossover between two parent genomes — a core NEAT feature — would introduce more combinatorial variation and potentially accelerate adaptation.
+
+**Metabolic cost of cognition** — Adding an energy penalty proportional to total neural activation would create evolutionary pressure toward efficient, sparse networks. Animals with unnecessarily large or active brains would die faster, naturally pruning redundant connections and driving the emergence of leaner cognitive strategies.
+
+**Systematic parameter sweeps** — Running many parallel simulations across parameter ranges (mutation rates, population sizes, energy landscapes) to map which conditions produce the richest emergent behaviour.
+
+---
+
+## Running the Simulation INCOMPLETE
+
+```bash
+# Install dependencies
+pip install numpy torch fastapi uvicorn
+
 ```
-
-### Running the Web Simulation
-
-Start the backend server with:
-
-```sh
-uvicorn app:app --reload
-```
-
-Open a browser and visit:
-
-```sh
-http://127.0.0.1:8000
-```
-
-### Legacy Desktop UI
-
-The legacy Pygame desktop UI is still available via:
-
-```sh
-python main.py
-```
-
-## Files
-
-- `main.py` — Entry point for the simulation
-- `class_world.py` — Main world logic and simulation loop
-- `class_herbivore_nn.py` — Neural network class for animals
-- `game_functions.py` — Utility and vision functions
-- `app.py` — FastAPI backend serving simulation state for a web UI
-- `herbivore.png`, `predator.png` — Sprites for visualization
-
-## FastAPI Backend
-
-A minimal FastAPI backend is available in `app.py`.
-
-Run it with:
-
-```sh
-uvicorn app:app --reload
-```
-
-Then use `/state`, `/chart`, and `/step` endpoints to drive the simulation from a browser UI.
-
-## Controls
-
-- `r` — Toggle raycast vision display
-- `SPACE` — Deselect selected animal
-- `s` — Spawn more plants, herbivores, and predators
-- `p` — Print extinction counters
-- `a` — Print neural network hidden layer statistics
-- Click on an animal to view its stats
