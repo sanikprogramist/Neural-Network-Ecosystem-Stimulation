@@ -1,6 +1,6 @@
 import pickle
 import io
-import copy
+#import copy
 from pathlib import Path
 from typing import Optional
 
@@ -24,22 +24,12 @@ def serve_index():
     return FileResponse(static_dir / "index.html")
 
 world = World()
-world.spawn_food(world.starting_plant)
+world.spawn_plants(world.starting_plant)
 world.spawn_herbivore(world.starting_herbivore)
 world.spawn_predator(world.starting_predator)
 
-
 class StepRequest(BaseModel):
     dt: float = 1 / 60.0
-
-
-class SpawnRequest(BaseModel):
-    food: Optional[int] = 0
-    herbivores: Optional[int] = 0
-    predators: Optional[int] = 0
-
-class SpeedRequest(BaseModel):
-    multiplier: float
 
 class RestartSettingsRequest(BaseModel):
     # Global Settings
@@ -143,6 +133,7 @@ def save_chart_data():
 
 @app.get("/settings")
 def get_current_settings():
+    #perhaps i should have made a structure for settings
     return {
         "world_speed_multiplier": world.world_speed_multiplier,
         "max_speed": world.max_speed,
@@ -260,7 +251,6 @@ def restart_simulation(req: RestartSettingsRequest):
     world.herbivore_resurrection_random_count = req.herbivore_resurrection_random_count
     world.herbivore_resurrection_recent_count = req.herbivore_resurrection_recent_count
 
-    
     world.predator_size = req.predator_size
     world.predator_satiety_loss_factor = req.predator_satiety_loss_factor
     world.predator_max_satiety = req.predator_max_satiety
@@ -273,7 +263,7 @@ def restart_simulation(req: RestartSettingsRequest):
     world.recalculate_dependent_attributes()
     
     # 3. Spawn initial populations using the configured starting constraints
-    world.spawn_food(world.starting_plant)
+    world.spawn_plants(world.starting_plant)
     world.spawn_herbivore(world.starting_herbivore)
     world.spawn_predator(world.starting_predator)
     
@@ -288,17 +278,14 @@ def select_animal(data: dict):
     if species == "herbivore":
         world.selected_herbivore_index = animal_id
         world.selected_predator_index = None
-        
     elif species == "predator":
         world.selected_predator_index = animal_id
         world.selected_herbivore_index = None
-
     else:
         world.selected_herbivore_index = None
         world.selected_predator_index = None
     
     return {"success": True}
-
 
 @app.post("/debug_kill_selected")
 def kill_selected_animal():
@@ -371,35 +358,23 @@ def spawn_with_brain(data: dict):
             brain_template.out.weight.data = w
 
         # Set biases from frontend data
-        print(f"DEBUG: biases_data = {biases_data}")
-        print(f"DEBUG: brain_template.layers = {len(brain_template.layers)} layers")
-        print(f"DEBUG: brain_template.out exists = {brain_template.out is not None}")
         
         for layer_idx, layer in enumerate(brain_template.layers):
             if layer_idx < len(biases_data):
                 b = torch.tensor(np.array(biases_data[layer_idx], dtype=np.float32), dtype=torch.float32)
-                print(f"DEBUG: Setting bias for layer {layer_idx}, shape {b.shape}, values {b}")
                 layer.bias.data = b
         if len(biases_data) > len(brain_template.layers):
             b = torch.tensor(np.array(biases_data[len(brain_template.layers)], dtype=np.float32), dtype=torch.float32)
-            print(f"DEBUG: Setting output layer bias, shape {b.shape}, values {b}")
             brain_template.out.bias.data = b
-        
-        # Verify biases were set
-        print(f"DEBUG: After setting, output layer bias = {brain_template.out.bias.data}")
-
+    
         # Spawn and assign brains
         if species == "herbivore":
             world.spawn_herbivore(spawn_count, parent_index=-1)
             after_count = int(np.sum(world.alive_herbivore_array))
             newly_spawned_count = after_count - before_count
             alive_indices = np.where(world.alive_herbivore_array)[0]
-            print(f"DEBUG: before_count={before_count}, after_count={after_count}, newly_spawned_count={newly_spawned_count}")
-            print(f"DEBUG: alive_indices={alive_indices}, taking last {newly_spawned_count}")
             for i in range(newly_spawned_count):
                 idx = alive_indices[-(i+1)]
-                print(f"DEBUG: Assigning custom brain to herbivore index {idx}")
-                print(f"DEBUG: Custom brain out.bias before copy: {brain_template.out.bias.data}")
                 # Create new brain and copy state_dict (more reliable than deepcopy for PyTorch)
                 new_brain = AnimalBrain(
                     n_external_infos=n_external,
@@ -410,19 +385,14 @@ def spawn_with_brain(data: dict):
                 )
                 new_brain.load_state_dict(brain_template.state_dict())
                 world.herbivore_brains[idx] = new_brain
-                print(f"DEBUG: After state_dict copy, animal {idx} brain out.bias: {world.herbivore_brains[idx].out.bias.data}")
                 world.herbivore_colours[idx] = color
         else:
             world.spawn_predator(spawn_count, parent_index=-1)
             after_count = int(np.sum(world.alive_predator_array))
             newly_spawned_count = after_count - before_count
             alive_indices = np.where(world.alive_predator_array)[0]
-            print(f"DEBUG: before_count={before_count}, after_count={after_count}, newly_spawned_count={newly_spawned_count}")
-            print(f"DEBUG: alive_indices={alive_indices}, taking last {newly_spawned_count}")
             for i in range(newly_spawned_count):
                 idx = alive_indices[-(i+1)]
-                print(f"DEBUG: Assigning custom brain to predator index {idx}")
-                print(f"DEBUG: Custom brain out.bias before copy: {brain_template.out.bias.data}")
                 new_brain = AnimalBrain(
                     n_external_infos=n_external,
                     n_self_infos=n_self,
@@ -432,7 +402,6 @@ def spawn_with_brain(data: dict):
                 )
                 new_brain.load_state_dict(brain_template.state_dict())
                 world.predator_brains[idx] = new_brain
-                print(f"DEBUG: After state_dict copy, animal {idx} brain out.bias: {world.predator_brains[idx].out.bias.data}")
                 world.predator_colours[idx] = color
         
         return {"success": True, "message": f"Spawned {newly_spawned_count} {species}(es) with designed brain"}

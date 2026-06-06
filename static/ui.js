@@ -129,7 +129,6 @@ export function initUI() {
 
     spawnHerbivoresButton.addEventListener('click', async () => {
         const result = await api.spawnRandomHerbivores();
-        statusEl.textContent = result.message || 'Spawned 5 herbivores.';
         const state = await api.fetchState();
         lastState = state;
         drawState(state, canvas, networkCanvas, statsEl);
@@ -138,7 +137,6 @@ export function initUI() {
 
     spawnPredatorsButton.addEventListener('click', async () => {
         const result = await api.spawnRandomPredators();
-        statusEl.textContent = result.message || 'Spawned 5 predators.';
         const state = await api.fetchState();
         lastState = state;
         drawState(state, canvas, networkCanvas, statsEl);
