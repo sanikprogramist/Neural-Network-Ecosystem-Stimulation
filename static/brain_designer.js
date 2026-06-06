@@ -590,6 +590,7 @@ export function initBrainDesigner({
                     species: template.species,
                     hiddenDims: template.hiddenDims,
                     weights: weights,
+                    biases: template.biases,
                     spawnCount: template.spawnCount,
                     color: template.colour
                 })

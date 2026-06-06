@@ -371,13 +371,22 @@ def spawn_with_brain(data: dict):
             brain_template.out.weight.data = w
 
         # Set biases from frontend data
+        print(f"DEBUG: biases_data = {biases_data}")
+        print(f"DEBUG: brain_template.layers = {len(brain_template.layers)} layers")
+        print(f"DEBUG: brain_template.out exists = {brain_template.out is not None}")
+        
         for layer_idx, layer in enumerate(brain_template.layers):
             if layer_idx < len(biases_data):
                 b = torch.tensor(np.array(biases_data[layer_idx], dtype=np.float32), dtype=torch.float32)
+                print(f"DEBUG: Setting bias for layer {layer_idx}, shape {b.shape}, values {b}")
                 layer.bias.data = b
         if len(biases_data) > len(brain_template.layers):
             b = torch.tensor(np.array(biases_data[len(brain_template.layers)], dtype=np.float32), dtype=torch.float32)
+            print(f"DEBUG: Setting output layer bias, shape {b.shape}, values {b}")
             brain_template.out.bias.data = b
+        
+        # Verify biases were set
+        print(f"DEBUG: After setting, output layer bias = {brain_template.out.bias.data}")
 
         # Spawn and assign brains
         if species == "herbivore":
@@ -385,18 +394,45 @@ def spawn_with_brain(data: dict):
             after_count = int(np.sum(world.alive_herbivore_array))
             newly_spawned_count = after_count - before_count
             alive_indices = np.where(world.alive_herbivore_array)[0]
+            print(f"DEBUG: before_count={before_count}, after_count={after_count}, newly_spawned_count={newly_spawned_count}")
+            print(f"DEBUG: alive_indices={alive_indices}, taking last {newly_spawned_count}")
             for i in range(newly_spawned_count):
                 idx = alive_indices[-(i+1)]
-                world.herbivore_brains[idx] = copy.deepcopy(brain_template)
+                print(f"DEBUG: Assigning custom brain to herbivore index {idx}")
+                print(f"DEBUG: Custom brain out.bias before copy: {brain_template.out.bias.data}")
+                # Create new brain and copy state_dict (more reliable than deepcopy for PyTorch)
+                new_brain = AnimalBrain(
+                    n_external_infos=n_external,
+                    n_self_infos=n_self,
+                    hidden_dims=hidden_dims,
+                    initial_weight_std=world.weight_std_for_new_neurons,
+                    species=species
+                )
+                new_brain.load_state_dict(brain_template.state_dict())
+                world.herbivore_brains[idx] = new_brain
+                print(f"DEBUG: After state_dict copy, animal {idx} brain out.bias: {world.herbivore_brains[idx].out.bias.data}")
                 world.herbivore_colours[idx] = color
         else:
             world.spawn_predator(spawn_count, parent_index=-1)
             after_count = int(np.sum(world.alive_predator_array))
             newly_spawned_count = after_count - before_count
             alive_indices = np.where(world.alive_predator_array)[0]
+            print(f"DEBUG: before_count={before_count}, after_count={after_count}, newly_spawned_count={newly_spawned_count}")
+            print(f"DEBUG: alive_indices={alive_indices}, taking last {newly_spawned_count}")
             for i in range(newly_spawned_count):
                 idx = alive_indices[-(i+1)]
-                world.predator_brains[idx] = copy.deepcopy(brain_template)
+                print(f"DEBUG: Assigning custom brain to predator index {idx}")
+                print(f"DEBUG: Custom brain out.bias before copy: {brain_template.out.bias.data}")
+                new_brain = AnimalBrain(
+                    n_external_infos=n_external,
+                    n_self_infos=n_self,
+                    hidden_dims=hidden_dims,
+                    initial_weight_std=world.weight_std_for_new_neurons,
+                    species=species
+                )
+                new_brain.load_state_dict(brain_template.state_dict())
+                world.predator_brains[idx] = new_brain
+                print(f"DEBUG: After state_dict copy, animal {idx} brain out.bias: {world.predator_brains[idx].out.bias.data}")
                 world.predator_colours[idx] = color
         
         return {"success": True, "message": f"Spawned {newly_spawned_count} {species}(es) with designed brain"}
