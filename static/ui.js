@@ -58,7 +58,7 @@ export function initUI() {
         stopLoop,
     });
 
-    charts.initCharts(document.getElementById('populationChart').getContext('2d'), document.getElementById('agePyramidChart').getContext('2d'));
+    charts.initCharts(document.getElementById('populationChart').getContext('2d'), document.getElementById('brainComplexityChart').getContext('2d'), document.getElementById('agePyramidChart').getContext('2d'));
 
     async function tick() {
         const now = performance.now();

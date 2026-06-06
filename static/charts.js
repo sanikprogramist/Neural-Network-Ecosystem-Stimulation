@@ -2,6 +2,7 @@ import { fetchChartData } from './api.js';
 
 let populationChart = null;
 let agePyramidChart = null;
+let brainComplexityChart = null;
 let chartInterval = null;
 let chartHistory = [];
 
@@ -38,7 +39,7 @@ function buildAgePyramid(data) {
     };
 }
 
-export function initCharts(popCtx, ageCtx) {
+export function initCharts(popCtx, bcCtx, ageCtx) {
     populationChart = new Chart(popCtx, {
         type: 'line',
         data: {
@@ -55,6 +56,25 @@ export function initCharts(popCtx, ageCtx) {
             scales: {
                 x: { title: { display: true, text: 'World Time' } },
                 y: { title: { display: true, text: 'Population' }, beginAtZero: true }
+            }
+        }
+    });
+
+    brainComplexityChart = new Chart(bcCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Herbivores', data: [], borderColor: 'rgba(76, 175, 80, 1)', fill: false },
+                { label: 'Predators', data: [], borderColor: '#b34700', fill: false }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            scales: {
+                x: { title: { display: true, text: 'World Time' } },
+                y: { title: { display: true, text: 'Avg. number of interneurons' }, beginAtZero: true }
             }
         }
     });
@@ -84,6 +104,7 @@ export function initCharts(popCtx, ageCtx) {
 export async function refreshCharts() {
     try {
         const data = await fetchChartData();
+        console.log(data)
         if (!data) return;
 
         chartHistory.push(cloneChartData(data));
@@ -99,6 +120,17 @@ export async function refreshCharts() {
             populationChart.data.datasets.forEach(d => d.data.shift());
         }
         populationChart.update();
+
+        const maxPointsBCChart = 300;
+        brainComplexityChart.data.labels.push(data.world_time.toFixed(1));
+        brainComplexityChart.data.datasets[0].data.push(data.herbivore_num_interneurons);
+        brainComplexityChart.data.datasets[1].data.push(data.predator_num_interneurons);
+
+        if (brainComplexityChart.data.labels.length > maxPointsBCChart) {
+            brainComplexityChart.data.labels.shift();
+            brainComplexityChart.data.datasets.forEach(d => d.data.shift());
+        }
+        brainComplexityChart.update();
 
         const pyramid = buildAgePyramid(data);
         agePyramidChart.data.datasets[0].data = pyramid.herbivore;
@@ -133,6 +165,10 @@ export function resetPopulationChart() {
     populationChart.data.labels = [];
     populationChart.data.datasets.forEach(d => d.data = []);
     populationChart.update();
+
+    brainComplexityChart.data.labels = [];
+    brainComplexityChart.data.datasets.forEach(d => d.data = []);
+    brainComplexityChart.update();
     if (agePyramidChart) {
         agePyramidChart.data.datasets[0].data = [0, 0, 0, 0, 0, 0];
         agePyramidChart.data.datasets[1].data = [0, 0, 0, 0, 0, 0];

@@ -7,7 +7,6 @@ from game_functions import *
 from class_animal_brain_nn import *
 
 #NOTES:
-# 1. fitness is exploitable but i dont know how to fix it. It probably will always be exploitable
 # 24. new chart - brain complexity
 
 class World:
@@ -28,7 +27,7 @@ class World:
         self.global_mutation_strength = 0.04 #setting exists
         self.colour_change_strength = 15 
         self.min_hidden_dim_size = 1 #setting exists 
-        self.max_hidden_dim_size = 10 #setting exists 
+        self.max_hidden_dim_size = 30 #setting exists 
         self.weight_std_for_new_neurons = 0.35 #setting exists
         self.fitness_distance_multiplier = 0.01 # how much the distance to food when it was found should contribute to fitness. multiplied with the distance and then added to fitness, so its basically like they get extra fitness for finding food from farther away, to encourage exploration
         self.enable_training_predators = True #ADD enable or disable always spawning a random "training" predator when there are no predators left, to exert selection pressure on herbivores even in the absence of predators. 
@@ -350,6 +349,19 @@ class World:
         }
 
     def get_chart_data(self):
+        if np.sum(self.alive_herbivore_array) > 0:
+            herbivore_num_interneurons = np.mean([np.sum(brain.get_dim_sizes()) for brain in self.herbivore_brains[self.alive_herbivore_array]])
+            herbivore_num_layers = np.mean([len(brain.get_dim_sizes()) for brain in self.herbivore_brains[self.alive_herbivore_array]])
+        else:
+            herbivore_num_interneurons = -1
+            herbivore_num_layers = -1
+        if np.sum(self.alive_predator_array) > 3:
+            predator_num_interneurons = np.mean([np.sum(brain.get_dim_sizes()) for brain in self.predator_brains[self.alive_predator_array]])
+            predator_num_layers = np.mean([len(brain.get_dim_sizes()) for brain in self.predator_brains[self.alive_predator_array]])
+        else:
+            predator_num_interneurons = -1
+            predator_num_layers = -1
+
         #we could just get this from world state, but this will make it easier to add more charts later:
         return {
             #for population chart:
@@ -365,7 +377,10 @@ class World:
             "predator_maturity_age": int(self.predator_min_age_to_reproduce),
 
             #for brain complexity chart:
-
+            "herbivore_num_interneurons": herbivore_num_interneurons,
+            "predator_num_interneurons": predator_num_interneurons,
+            "herbivore_num_layers": herbivore_num_layers,
+            "predator_num_layers": predator_num_layers,
         }
     
     def debug_kill(self):
@@ -507,7 +522,7 @@ class World:
             self.already_resurrected_herbivores += to_res
         elif self.already_resurrected_herbivores <= self.herbivore_resurrection_count + self.herbivore_resurrection_recent_count + self.herbivore_resurrection_random_count: 
             to_res = np.random.randint(low=1, high=6)
-            self.spawn_herbivore(to_res, parent_index=-1, random_res=True)
+            self.spawn_herbivore(to_res, parent_index=-1)
             self.already_resurrected_herbivores += to_res
         else:
             self.start_resurrecting_herbivores = False
@@ -890,7 +905,7 @@ class World:
             self.start_resurrecting_predators = True
         elif (np.sum(self.alive_predator_array) == 0) and self.enable_training_predators:
             #  add random "training predators" to exert selection pressure:
-            self.spawn_predator(np.random.randint(low=1, high=4), parent_index=-1, random_res=True)
+            self.spawn_predator(np.random.randint(low=1, high=4), parent_index=-1)
         if not self.start_resurrecting_predators:
             return
 
@@ -913,7 +928,7 @@ class World:
             self.already_resurrected_predators += to_res
         elif self.already_resurrected_predators <= self.predator_resurrection_count + self.predator_resurrection_recent_count + self.predator_resurrection_random_count: 
             to_res = np.random.randint(low=1, high=6)
-            self.spawn_predator(to_res, parent_index=-1, random_res=True)
+            self.spawn_predator(to_res, parent_index=-1)
             self.already_resurrected_predators += to_res
         else:
             self.start_resurrecting_predators = False
@@ -1061,7 +1076,7 @@ class World:
         for i in reproducing_predator_indices:
             self.spawn_predator(1,parent_index=i)
 
-    def spawn_predator(self, how_many_to_spawn, parent_index=-1, random_res=False): 
+    def spawn_predator(self, how_many_to_spawn, parent_index=-1): 
         available_slots = np.sum(np.invert(self.alive_predator_array))
         spawn_count = min(how_many_to_spawn, available_slots)
 
